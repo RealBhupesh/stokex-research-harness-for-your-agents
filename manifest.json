@@ -13,6 +13,7 @@
   "data_integrations": "documentation only; no authenticated live feed tested",
   "performance_status": "not backtested",
   "files": [
+    "assets/stockex-hero.png",
     "QUICKSTART.md",
     "README.md",
     "SKILL.md",
