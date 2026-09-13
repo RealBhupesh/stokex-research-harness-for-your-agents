@@ -31,7 +31,9 @@ The upgrade is successful only if it improves one or more of these decision prop
 5. **Risk detection:** accounting, governance, balance-sheet, regulatory, liquidity and thesis risks can independently stop the process.
 6. **Catalyst discipline:** a mispricing must have a plausible path to recognition or a defined long-duration monitoring logic.
 7. **Decision quality:** the final action follows from expected reward, downside, evidence confidence, mandate fit and portfolio fit.
-8. **Learning:** forecasts and decisions are frozen, later scored and attributed to process errors instead of rewritten after the outcome.
+8. **Causal awareness:** material global, Indian, sector, company, flow and market-structure forces are connected to the stock through an explicit transmission mechanism.
+9. **Price-move attribution:** unusual rises and falls are decomposed into market, sector, factor, flow, technical and company-specific components without inventing a single cause.
+10. **Learning:** forecasts and decisions are frozen, later scored and attributed to process errors instead of rewritten after the outcome.
 
 More prompts, indicators, formulas, famous names or headlines do not count as improvements unless they change one of these properties.
 
@@ -47,29 +49,33 @@ Version 3 will not:
 - convert news sentiment, social-media activity or notable ownership into an endorsement score;
 - use a formula outside its accounting or sector domain merely because the input exists;
 - fabricate consensus estimates, management access, channel checks, charts or data;
+- claim certainty about why a price moved when the evidence supports only correlation or a plausible narrative;
+- include every world event in a report without demonstrating a material transmission path to the company, valuation or market price;
 - use post-event or revised information in a historical decision record;
 - optimize thresholds on the same observations used to report performance;
 - place trades, connect a broker or authorize leverage and derivatives.
 
 ## 4. Operating model
 
-The workflow consists of twelve stages. Each stage produces a named artifact and a gate result. A later stage may send the case back for more evidence, but it may not silently fill an earlier gap.
+The workflow consists of fifteen stages. Each stage produces a named artifact and a gate result. A later stage may send the case back for more evidence, but it may not silently fill an earlier gap.
 
 | Stage | Analyst question | Required artifact | Gate |
 |---|---|---|---|
 | 0. Mandate | What outcome, horizon, loss tolerance and exclusions govern this decision? | Mandate card | `MANDATE_READY` |
 | 1. Universe | What investable set was actually considered and why? | Universe definition and screen log | `UNIVERSE_REPRODUCIBLE` |
 | 2. Evidence room | Do we have current, primary and point-in-time evidence for controlling claims? | Evidence packet and source ledger | `EVIDENCE_COMPLETE` |
-| 3. Business and industry | How does the company make money, defend economics and compare with peers? | Business and industry dossier | `BUSINESS_UNDERSTOOD` |
-| 4. Financial normalization | What are sustainable revenue, margins, cash flows, capital needs and balance-sheet risks? | Normalized historical model | `FINANCIALS_RECONCILED` |
-| 5. Expectations and variant | What is priced in, what do we believe differently and what evidence can prove us wrong? | Expectations and variant map | `VARIANT_DEFINED` |
-| 6. Forecast and valuation | What assumptions produce bear, base and bull values and returns? | Forecast model and valuation bridge | `VALUATION_COHERENT` |
-| 7. Market structure | Does price, volume, liquidity and technical structure support the chosen horizon? | Market-structure sheet | `EXECUTION_FEASIBLE` |
-| 8. Risk and forensics | What can permanently impair capital, break the thesis or prevent exit? | Risk register and forensic review | `RISK_ACCEPTABLE` |
-| 9. Catalysts | What could close the expectation gap, on what timeline and with what evidence? | Catalyst calendar | `CATALYST_CREDIBLE` |
-| 10. Decision and sizing | Is the opportunity attractive relative to alternatives and portfolio constraints? | Draft decision memo | `DECISION_SUPPORTED` |
-| 11. Adversarial IC | Can an independent skeptic kill the thesis or expose an unresolved contradiction? | IC challenge record | `IC_CLEARED` |
-| 12. Monitoring and learning | What signals change the view, and what did the process get right or wrong? | Thesis monitor and frozen prediction record | `MONITORING_ACTIVE` |
+| 3. World and market map | Which external forces can materially affect this company, sector, valuation or price? | World-to-stock exposure map | `TRANSMISSION_MAPPED` |
+| 4. Price-move attribution | Why is the stock rising or falling relative to the market and peers, and how certain are we? | Price-move attribution record | `MOVE_EXPLAINED_OR_LABELED` |
+| 5. Business and industry | How does the company make money, defend economics and compare with peers? | Business and industry dossier | `BUSINESS_UNDERSTOOD` |
+| 6. Financial normalization | What are sustainable revenue, margins, cash flows, capital needs and balance-sheet risks? | Normalized historical model | `FINANCIALS_RECONCILED` |
+| 7. Expectations and variant | What is priced in, what do we believe differently and what evidence can prove us wrong? | Expectations and variant map | `VARIANT_DEFINED` |
+| 8. Forecast and valuation | What assumptions produce bear, base and bull values and returns? | Forecast model and valuation bridge | `VALUATION_COHERENT` |
+| 9. Market structure | Does price, volume, liquidity and technical structure support the chosen horizon? | Market-structure sheet | `EXECUTION_FEASIBLE` |
+| 10. Risk and forensics | What can permanently impair capital, break the thesis or prevent exit? | Risk register and forensic review | `RISK_ACCEPTABLE` |
+| 11. Catalysts | What could close the expectation gap, on what timeline and with what evidence? | Catalyst calendar | `CATALYST_CREDIBLE` |
+| 12. Decision and sizing | Is the opportunity attractive relative to alternatives and portfolio constraints? | Draft decision memo | `DECISION_SUPPORTED` |
+| 13. Adversarial IC | Can an independent skeptic kill the thesis or expose an unresolved contradiction? | IC challenge record | `IC_CLEARED` |
+| 14. Monitoring and learning | What signals change the view, and what did the process get right or wrong? | Thesis monitor and frozen prediction record | `MONITORING_ACTIVE` |
 
 ### Stage routing
 
@@ -130,7 +136,44 @@ Every material claim must carry:
 
 Controlling claims about financial results, ownership, corporate actions, auditor matters and regulatory events require primary evidence whenever available. Secondary reporting may discover an issue but cannot close the evidence gate on its own.
 
-### 5.3 Normalized financial model
+### 5.3 World-to-stock intelligence and price-move attribution
+
+The system builds a relevance-filtered exposure graph before forecasting. It considers the world broadly but includes a driver in the decision only when it has a credible path into revenue, cost, assets, liabilities, financing, valuation, ownership flows, liquidity or market expectations.
+
+The minimum driver library covers:
+
+- global growth, recession and risk appetite;
+- central-bank policy, bond yields, credit spreads and system liquidity;
+- INR and material trading or funding currencies;
+- crude oil, gas, metals, agricultural commodities, power and freight;
+- inflation, employment, consumption, investment, credit growth and government spending;
+- geopolitics, sanctions, tariffs, trade routes and supply-chain disruption;
+- Indian regulation, taxation, industrial policy, environmental rules and court decisions;
+- technology shifts and substitution risk;
+- weather, monsoon, seasonality, disease and physical disruption when relevant;
+- industry capacity, inventories, pricing, imports, exports and competitor actions;
+- FPI, DII, promoter, insider and passive-index flows where verified;
+- factor exposures such as size, value, momentum, quality, beta and crowded positioning;
+- company filings, results, guidance, capital allocation, governance and corporate actions;
+- news narratives, analyst revisions and social attention as perception evidence only.
+
+Every included driver records source, current state, direction, exposure, transmission path, expected lag, magnitude range, scenario sensitivity, leading indicator, countervailing force and confidence. Irrelevant drivers are marked `NOT MATERIAL` rather than discussed for completeness.
+
+For every material rise or fall requested by the user, the system performs a price-move attribution pass:
+
+1. verify the exact price window and adjust for splits, bonuses, dividends and other corporate actions;
+2. compare total return with a broad Indian benchmark, sector index and an explicit peer basket;
+3. measure abnormal volume, delivery, volatility, gaps, circuits and changes in liquidity where data exists;
+4. construct a timestamped event timeline from exchange filings, company disclosures, official macro releases and credible reporting;
+5. test market-wide, sector, factor, flow, technical and company-specific explanations;
+6. use peer and supplier-customer reactions as counterfactual evidence where possible;
+7. state what changed in earnings expectations, discount rate, risk perception or supply and demand for shares;
+8. label each proposed cause `CONFIRMED`, `STRONGLY SUPPORTED`, `PLAUSIBLE` or `UNEXPLAINED`;
+9. carry the result into forecasts, scenarios, risk limits and catalysts only when the transmission mechanism is material.
+
+The harness must not confuse a nearby headline with a cause. Multiple drivers may matter, and a residual move may remain unexplained. `MOVE_EXPLAINED_OR_LABELED` passes when the movement has either defensible attribution or an explicit unexplained residual with no fabricated story.
+
+### 5.4 Normalized financial model
 
 The model must reconcile reported history before forecasting. At minimum it covers revenue drivers, gross or contribution economics where relevant, operating margins, working capital, capex, free cash flow, debt, dilution, contingent liabilities, related-party transactions and sector-specific operating metrics.
 
@@ -145,7 +188,7 @@ Every adjustment must state:
 
 For banks, NBFCs, insurers and other financial companies, the model uses sector-specific balance-sheet and credit metrics rather than industrial-company free-cash-flow formulas.
 
-### 5.4 Expectations and variant map
+### 5.5 Expectations and variant map
 
 The system separates four layers:
 
@@ -156,7 +199,7 @@ The system separates four layers:
 
 Each variant must include its mechanism, magnitude, time horizon, evidence, consensus source or reverse-valuation inference, disconfirming evidence, confidence and catalyst. If no material, defensible difference exists, the correct decision is `WATCH`, `REJECT` or `INSUFFICIENT DATA`.
 
-### 5.5 Scenario and valuation contract
+### 5.6 Scenario and valuation contract
 
 Bear, base and bull cases must use internally consistent operating assumptions. The report shows the bridge from operating drivers to financial statements, valuation and prospective return.
 
@@ -171,7 +214,7 @@ Rules:
 - test return plausibility against the stated horizon, dilution, dividends, costs and downside;
 - disclose when a terminal value, exit multiple or commodity assumption dominates the result.
 
-### 5.6 Risk contract
+### 5.7 Risk contract
 
 Risk is not the inverse of conviction. The system maintains separate layers for:
 
@@ -191,7 +234,7 @@ Risk is not the inverse of conviction. The system maintains separate layers for:
 
 Each risk states evidence, mechanism, leading indicator, likelihood as a range or `UNKNOWN`, severity, mitigant, residual exposure, owner, monitoring frequency and invalidation threshold. Auditor resignation or qualification, unverifiable cash, severe disclosure inconsistency, unresolved promoter encumbrance, material legal uncertainty, impossible exit capacity or missing controlling filings can independently force `REJECT` or `INSUFFICIENT DATA`.
 
-### 5.7 Catalyst contract
+### 5.8 Catalyst contract
 
 A catalyst is a mechanism that can change expectations, not merely a scheduled date. Each catalyst records:
 
@@ -204,7 +247,7 @@ A catalyst is a mechanism that can change expectations, not merely a scheduled d
 - pre-mortem failure mode;
 - review trigger if the event is delayed or already priced.
 
-### 5.8 Ownership and market-perception contract
+### 5.9 Ownership and market-perception contract
 
 Famous investors, mutual funds, FPIs, insurers and promoter transactions are context, never borrowed conviction. The analyst must verify the exact legal entity, security, reporting period, position size where disclosed, change versus the previous comparable period and source date.
 
@@ -273,13 +316,28 @@ Monitoring classifies new information as:
 - changes risk or exit capacity;
 - irrelevant noise.
 
+The monitor is active in the sense that it maintains triggers and demands a refresh when new information arrives. Without a configured data feed or automation, it must provide a manual refresh checklist and must not claim continuous monitoring.
+
+Refresh triggers include material exchange filings, results and guidance, auditor or management changes, corporate actions, unusual relative price or volume, thesis-critical commodity or FX moves, regulatory decisions, rating actions, major competitor events, catalyst delays and breached risk thresholds. Each trigger identifies the affected research stages so the system reruns only the necessary work before repeating the IC decision.
+
 Post-mortems attribute errors to source failure, accounting normalization, industry analysis, forecast, valuation, catalyst timing, technical execution, risk, portfolio fit or decision discipline. Threshold changes require multiple out-of-sample observations and a documented version change. A recent winner or loser does not automatically rewrite the framework.
 
 ## 9. Planned repository architecture
 
-The implementation will preserve the current package and add four bounded subsystems.
+The implementation will preserve the current package and add five bounded subsystems.
 
-### Subsystem A: research packet and source control
+### Subsystem A: world and market intelligence
+
+Planned additions:
+
+- `references/world-to-stock-transmission.md`
+- `references/price-move-attribution.md`
+- `references/active-research-triggers.md`
+- `skills/india-equity-market-intelligence/SKILL.md`
+- `templates/world-exposure-map.md`
+- `templates/price-move-attribution.md`
+
+### Subsystem B: research packet and source control
 
 Planned additions:
 
@@ -290,7 +348,7 @@ Planned additions:
 - `templates/evidence-packet.md`
 - `templates/normalized-financial-model.md`
 
-### Subsystem B: expectations, forecasts and catalysts
+### Subsystem C: expectations, forecasts and catalysts
 
 Planned additions:
 
@@ -301,7 +359,7 @@ Planned additions:
 - `templates/expectations-variant-map.md`
 - `templates/catalyst-calendar.md`
 
-### Subsystem C: decision and investment committee
+### Subsystem D: decision and investment committee
 
 Planned additions:
 
@@ -312,7 +370,7 @@ Planned additions:
 - a machine-readable decision-packet schema and deterministic validator;
 - tests covering incomplete evidence, hard-stop risk, inconsistent scenarios and prohibited gate overrides.
 
-### Subsystem D: monitoring and analyst calibration
+### Subsystem E: monitoring and analyst calibration
 
 Planned additions:
 
@@ -332,6 +390,8 @@ The validator will operate on a plain JSON packet using the Python standard libr
 - mandate;
 - universe definition;
 - source ledger and evidence conflicts;
+- world-to-stock drivers, transmission paths and materiality decisions;
+- price windows, benchmarks, peer baskets, event timelines, proposed causes, confidence labels and unexplained residuals;
 - normalized financial adjustments;
 - market expectations and analyst forecasts;
 - variant claims;
@@ -354,7 +414,9 @@ The validator checks structure and decision consistency. It does not decide whet
 - a current recommendation without a research cutoff or source ledger;
 - a famous-holder claim lacking entity, date and primary-source provenance;
 - a chart claim lacking dated data;
-- a historical record containing a source published after its cutoff.
+- a historical record containing a source published after its cutoff;
+- an attributed price move without a dated price window, benchmark comparison or supporting event evidence;
+- a macro or geopolitical claim with no stated transmission path to the company, valuation or share demand;
 
 ## 11. Failure and fallback behavior
 
@@ -392,9 +454,13 @@ At minimum, fixtures will cover:
 7. notable-investor ownership that must not override fundamentals;
 8. positive news already reflected in price;
 9. missing primary filing;
-10. scenario probabilities and gate statuses that are internally inconsistent.
+10. scenario probabilities and gate statuses that are internally inconsistent;
 11. a 100%-in-two-month objective that must route to asymmetric speculation and cannot become a guaranteed or base-case claim;
-12. a moonshot setup with exciting upside but unacceptable liquidity, dilution or governance risk that must be vetoed.
+12. a moonshot setup with exciting upside but unacceptable liquidity, dilution or governance risk that must be vetoed;
+13. a stock rising with its entire sector where the system must not falsely attribute the move to company news;
+14. a stock falling after results where weak guidance, valuation de-rating, market beta and liquidity are competing explanations;
+15. a geopolitical headline with no material company exposure that must be marked `NOT MATERIAL`;
+16. a price-volume anomaly with no verified catalyst that must retain an `UNEXPLAINED` residual and trigger enhanced risk review.
 
 ### Release evidence
 
@@ -402,9 +468,9 @@ A release is complete only after fresh tests, skill validation, repository statu
 
 ## 13. Delivery sequence
 
-Implementation should proceed in four reviewable increments matching the subsystems above. Each increment updates tests, documentation, the manifest and the orchestrator. This prevents a large prompt rewrite from hiding broken links, conflicting rules or gate regressions.
+Implementation should proceed in five reviewable increments matching the subsystems above. Each increment updates tests, documentation, the manifest and the orchestrator. This prevents a large prompt rewrite from hiding broken links, conflicting rules or gate regressions.
 
-The final release target is `3.0.0`. Intermediate repository commits may be tagged as implementation phases, but the README must not call the system v3 until all four subsystems pass validation.
+The final release target is `3.0.0`. Intermediate repository commits may be tagged as implementation phases, but the README must not call the system v3 until all five subsystems pass validation.
 
 ## 14. Design rationale and authoritative anchors
 
@@ -414,6 +480,8 @@ The architecture reflects current official and professional research expectation
 - BSE provides official corporate announcement and filing surfaces that can corroborate exchange disclosures.
 - SEBI's Research Analyst guidelines and Investor Charter reinforce the need to separate a research-support tool from regulated personalized advice and to use clear risk disclosures.
 - CFA Institute's equity-research guidance identifies company and industry analysis, financial forecasts, multiple valuation methods, mispricing, re-rating mechanisms, liquidity, ownership, risk and disclosure footnotes as core report elements.
+- RBI's DBIE and MoSPI's official releases provide primary Indian macroeconomic inputs, while NSE historical price-volume, index and corporate-announcement surfaces support benchmark-relative attribution.
+- SEBI's material-event disclosure framework supports a filing-first event timeline, but temporal proximity alone still does not prove that a disclosure caused a price move.
 
 Source register:
 
@@ -424,8 +492,16 @@ Source register:
 - NSE, *Corporate Filings Announcements*: https://www.nseindia.com/companies-listing/corporate-filings-announcements
 - NSE, *Corporate Filings Shareholding Patterns*: https://www.nseindia.com/companies-listing/corporate-filings-shareholding-pattern
 - BSE, *Corporate Announcements*: https://www.bseindia.com/corporates
+- RBI, *Database on Indian Economy*: https://data.rbi.org.in/
+- MoSPI, *Latest Releases*: https://www.mospi.gov.in/latest-releases
+- NSE, *Daily Market Reports and Historical Archives*: https://www.nseindia.com/resources/historical-reports-capital-market-daily-monthly-archives
+- SEBI, *Listing Obligations and Disclosure Requirements Regulations*, amended through 22 January 2026: https://www.sebi.gov.in/legal/regulations/jan-2026/securities-and-exchange-board-of-india-listing-obligations-and-disclosure-requirements-regulations-2015-last-amended-on-january-22-2026-_99375.html
+- IMF, *World Economic Outlook Data*: https://data.imf.org/Datasets/WEO
+- World Bank, *Commodity Markets and Pink Sheet Data*: https://www.worldbank.org/en/research/commodity-markets
+- WTO, *International Trade and Tariff Data*: https://www.wto.org/english/res_e/statis_e/trade_data_e.htm
+- Petroleum Planning and Analysis Cell, *Indian Crude and Petroleum Data*: https://ppac.gov.in/
 - CFA Institute, *Equity Research Report Essentials*, September 2020: https://www.cfainstitute.org/sites/default/files/-/media/documents/support/research-challenge/challenge/rc-equity-research-report-essentials.pdf
 
 ## 15. Approval question
 
-Approval of this design means the implementation plan may be written for the four subsystems. It does not approve any stock recommendation, live-data claim or trading integration.
+Approval of this design means the implementation plan may be written for the five subsystems. It does not approve any stock recommendation, live-data claim or trading integration.
