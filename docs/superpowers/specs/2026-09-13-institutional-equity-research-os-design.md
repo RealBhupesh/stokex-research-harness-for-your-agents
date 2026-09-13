@@ -18,6 +18,8 @@ The system may recommend further research, watching, waiting or rejection. It is
 
 The target is institutional process quality, not institutional branding. The harness remains research and decision support. It does not represent a SEBI-registered analyst, personalize advice without adequate suitability inputs, execute orders or promise returns.
 
+The mandate may be conservative, compounding, tactical or highly speculative. Flexibility means changing the research lens and risk budget to match the objective. It does not mean lowering evidence standards or presenting an extreme outcome as likely.
+
 ## 2. Success criteria
 
 The upgrade is successful only if it improves one or more of these decision properties:
@@ -38,6 +40,7 @@ More prompts, indicators, formulas, famous names or headlines do not count as im
 Version 3 will not:
 
 - claim to scan every Indian security without a defined and reproducible universe;
+- promise that a requested return, including 100% in two months, can be achieved;
 - infer investor suitability from a ticker request alone;
 - provide live prices or real-time alerts without a configured data source;
 - use a single opaque score to overrule a hard risk gate;
@@ -73,7 +76,36 @@ The workflow consists of twelve stages. Each stage produces a named artifact and
 - **Short term, days to months:** emphasize liquidity, technical structure, event timing, expectation revision and gap risk. Fundamentals remain a risk control.
 - **Long term, multiple years:** emphasize unit economics, competitive advantage, reinvestment runway, normalized returns on capital, stewardship, valuation and thesis milestones.
 - **Medium term, roughly 6 to 24 months:** require the long-term business and valuation work plus a dated catalyst or reassessment path.
+- **Asymmetric speculation, including extreme return objectives:** search for identifiable events, inflections or expectation gaps capable of producing exceptional upside, then apply stricter fraud, liquidity, dilution, circuit, loss-capacity and catalyst-failure gates. The requested return is a search objective, not the base-case forecast.
 - **Screen or compare:** may stop at `SCREEN ONLY`; it cannot inherit the authority of completed single-stock diligence.
+
+### Mandate modes
+
+The intake router will support five explicit modes:
+
+| Mode | Primary objective | Dominant research lens | Required risk framing |
+|---|---|---|---|
+| Capital preservation | Protect principal while seeking modest return | balance sheet, cash generation, valuation and liquidity | permanent-loss avoidance |
+| Long-term compounding | Grow capital over multiple years | business quality, reinvestment, stewardship and valuation | thesis and valuation downside |
+| Tactical swing | Capture a move over days to months | revisions, price and volume, event timing and liquidity | stop failure and gap loss |
+| Event driven | Capture a defined re-pricing event | event tree, market expectations and scenario value | event failure and delay |
+| Asymmetric speculation | Seek unusually large upside with explicitly risked capital | convex catalyst, expectation discontinuity and survivability | partial or total loss must be affordable |
+
+An extreme target such as 100% in two months automatically routes to asymmetric speculation. Before screening, the system must obtain or explicitly leave unknown the amount the user can afford to lose, maximum portfolio exposure and whether total loss of the allocated capital is acceptable. Unknown loss capacity blocks personalized sizing.
+
+The output must distinguish:
+
+- requested outcome;
+- mathematically implied return hurdle;
+- historically or structurally plausible range;
+- bear, base and upside scenario returns;
+- estimated probability only when defensibly supported;
+- expected value when valid probabilities exist;
+- probability of permanent or total capital loss;
+- conditions required for the extreme outcome;
+- safer alternatives with lower upside when available.
+
+The harness may find no credible candidate. It may return a small speculative watchlist when securities have a genuine catalyst and survivable downside, but it must reject pump-like price action, unverifiable narratives, impossible exit capacity, unresolved governance concerns and setups whose only thesis is that price recently increased.
 
 ## 5. Core research contracts
 
@@ -134,6 +166,7 @@ Rules:
 - reconcile materially different model outputs instead of averaging them mechanically;
 - show sensitivity to the assumptions that dominate value;
 - use scenario probabilities only when the analyst explicitly supplies them and they sum to 100%;
+- never use the user's desired return as the probability-weighted base case;
 - do not disguise uncertainty with decimal precision;
 - test return plausibility against the stated horizon, dilution, dividends, costs and downside;
 - disclose when a terminal value, exit multiple or commodity assumption dominates the result.
@@ -192,6 +225,7 @@ The final output uses two layers.
 ### Research status
 
 - `RESEARCH CANDIDATE`: diligence supports further decision-making within the mandate.
+- `SPECULATIVE RESEARCH CANDIDATE`: evidence supports only an explicitly high-risk, capped-loss mandate; this is not a normal recommendation or a claim that the extreme outcome is probable.
 - `WATCH / WAIT`: business or setup has merit, but price, timing, evidence or risk is inadequate.
 - `REJECT`: a hard gate fails or expected reward does not justify risk.
 - `SCREEN ONLY`: preliminary comparison without completed single-stock diligence.
@@ -205,6 +239,8 @@ The final output uses two layers.
 - `VETO`: a hard risk or mandate breach makes the case unacceptable.
 
 No aggregate score can convert `VETO`, `REJECT` or `INSUFFICIENT DATA` into approval. Confidence is a statement about evidence and model reliability, not a forecast of investment success.
+
+For asymmetric speculation, `APPROVE FOR CONSIDERATION` additionally requires a defined maximum capital-at-risk rule, executable liquidity, no unresolved hard-stop risk, a time-bound catalyst, a pre-event and post-event exit plan, and acceptance that the allocated capital may be lost. If any element is missing, the strongest permitted action is `WATCH / WAIT` or `RETURN FOR WORK`.
 
 ## 7. Adversarial investment committee
 
@@ -357,6 +393,8 @@ At minimum, fixtures will cover:
 8. positive news already reflected in price;
 9. missing primary filing;
 10. scenario probabilities and gate statuses that are internally inconsistent.
+11. a 100%-in-two-month objective that must route to asymmetric speculation and cannot become a guaranteed or base-case claim;
+12. a moonshot setup with exciting upside but unacceptable liquidity, dilution or governance risk that must be vetoed.
 
 ### Release evidence
 
