@@ -7,7 +7,7 @@ Open `SKILL.md` in an assistant with web browsing and file access, or upload thi
 > [!WARNING]
 > This repository is a research and decision-support harness, not investment advice, a broker, a portfolio manager or a guarantee of returns. It is not SEBI-registered and it does not execute trades. Verify every current fact yourself before risking money.
 
-![STOCKEX, evidence-first Indian equity research](assets/stockex-hero.png)
+![STOCKEX, evidence-first Indian equity research](assets/stockex-hero.jpg)
 
 STOCKEX is an evidence-first Indian equity research harness for objective-specific screening, valuation, risk detection and skeptical review.
 
@@ -28,7 +28,7 @@ flowchart TD
 ```
 
 ## File map
-- `assets/stockex-hero.png`: repository hero and social cover image.
+- `assets/stockex-hero.jpg`: repository hero and social cover image.
 - `SKILL.md`: workflow entry point.
 - `skills/`: screening, trade research, fundamentals, valuation, risk, skeptical review.
 - `references/`: intake, evidence, point-in-time controls, expectations, return plausibility, multi-layer risk detection, factor/regime, forensics, portfolio context, calibration, expert rules, sector overlays, scoring, research sources and validation cases.
