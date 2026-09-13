@@ -58,4 +58,3 @@ Read these before using the harness with real money:
 - **Current law wins:** SEBI, NSE, BSE, RBI, tax, settlement, margin and corporate-action rules can change. Check the current official rule and your broker's terms before acting.
 
 If any warning changes the decision, the correct outcome is `WATCH`, `REJECT` or `INSUFFICIENT DATA`, not a forced recommendation.
-
