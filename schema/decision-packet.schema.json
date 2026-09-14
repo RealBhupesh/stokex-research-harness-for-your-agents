@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stockex.local/schema/decision-packet.schema.json",
+  "title": "STOCKEX decision packet",
+  "type": "object",
+  "required": ["metadata", "mandate", "sources", "gates", "risks", "contradictions", "decision"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["issuer", "symbol", "exchange", "research_cutoff"],
+      "properties": {
+        "issuer": {"type": "string", "minLength": 1},
+        "symbol": {"type": "string", "minLength": 1},
+        "exchange": {"enum": ["NSE", "BSE"]},
+        "research_cutoff": {"type": "string", "format": "date-time"}
+      }
+    },
+    "mandate": {
+      "type": "object",
+      "required": ["mode", "horizon", "personalized_sizing"],
+      "properties": {
+        "mode": {"enum": ["CAPITAL_PRESERVATION", "LONG_TERM_COMPOUNDING", "TACTICAL_SWING", "EVENT_DRIVEN", "ASYMMETRIC_SPECULATION"]},
+        "horizon": {"type": "string", "minLength": 1},
+        "personalized_sizing": {"type": "boolean"}
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "publisher", "url", "source_class", "published_at", "available_at"]
+      }
+    },
+    "gates": {"type": "object", "additionalProperties": {"type": "boolean"}},
+    "risks": {
+      "type": "object",
+      "required": ["hard_stops"],
+      "properties": {"hard_stops": {"type": "array"}}
+    },
+    "contradictions": {"type": "array"},
+    "legal_credit": {
+      "type": "object",
+      "properties": {"issues": {"type": "array"}}
+    },
+    "speculation_controls": {
+      "type": "object",
+      "properties": {
+        "max_capital_at_risk": {"type": "number", "exclusiveMinimum": 0},
+        "total_loss_accepted": {"const": true},
+        "catalyst": {"type": "string", "minLength": 1},
+        "pre_event_exit_plan": {"type": "string", "minLength": 1},
+        "post_event_exit_plan": {"type": "string", "minLength": 1},
+        "liquidity_passed": {"const": true}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["research_status", "ic_action"],
+      "properties": {
+        "research_status": {"enum": ["RESEARCH_CANDIDATE", "SPECULATIVE_RESEARCH_CANDIDATE", "WATCH", "REJECT", "SCREEN_ONLY", "INSUFFICIENT_DATA"]},
+        "ic_action": {"enum": ["APPROVE_FOR_CONSIDERATION", "APPROVE_WITH_CONDITIONS", "RETURN_FOR_WORK", "VETO"]}
+      }
+    }
+  }
+}

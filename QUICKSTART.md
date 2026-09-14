@@ -1,4 +1,10 @@
 # Requests to reuse
+“Run the complete STOCKEX v3 workflow on [company]. Do not form an opinion until the evidence room, world-to-stock map, price-move attribution, normalized history, driver forecasts, scenarios, risk register and independent IC review are complete.”
+
+“Why has [stock] risen/fallen over [exact period]? Adjust for corporate actions, compare Nifty, sector and peers, inspect volume and event timing, test competing explanations and preserve anything unexplained.”
+
+“Find Indian stocks that could produce [extreme return] over [short horizon]. Treat it as asymmetric speculation, not a promised base case. Require a dated catalyst, executable liquidity, capped capital at risk, total-loss acceptance and pre-event and post-event exit plans.”
+
 “Use the Indian stock research workflow. I have ₹[capital], my goal is [goal], my horizon is [time], and I can tolerate [loss in rupees or percent]. Screen [universe], exclude [sectors], compare the top candidates and tell me whether to act or wait. Use fresh NSE/BSE disclosures and timestamped prices.”
 
 “Research [company and ticker] for 3 to 5 year ownership. Compare three relevant peers, normalize cash flows, build bear/base/bull valuations, show what the price implies, and give thesis kill conditions.”
@@ -8,6 +14,8 @@
 “Find a cash-equity swing setup for 2 to 8 weeks. No leverage. My total trading capital is ₹[amount], total concurrent risk budget is [amount], per-trade planned risk is [amount], and sector exposure is [limit]. Show the entry trigger, stop logic, realistic reward after costs, event risk and reasons to wait.”
 
 “Review my previous thesis using the monitoring template. What changed in the evidence, valuation and risks? Do not change the original thesis silently.”
+
+“Update thesis [ID] using new evidence. Classify each trigger, identify affected assumptions, rerun only the necessary stages, validate the state transition and preserve the frozen original record.”
 
 “Analyze [company]. Calculate only the applicable Piotroski, Altman, Beneish, CAGR, cash-return and valuation diagnostics, showing every component and limitation. Verify whether any notable investors, funds, promoters or insiders hold or recently traded the stock using dated primary disclosures. Map material news from the last [period], deduplicate repeated headlines, and explain what could affect earnings or valuation.”
 
@@ -24,3 +32,5 @@ Copy the full `indian-stock-research` folder to your assistant's supported skill
 
 ## Before the first actual stock run
 Supply horizon, objective, tolerable loss, investable capital and current holdings if sizing is wanted. A broker read-only export or dated CSV is enough for many price checks. Do not provide passwords or session tokens in chat. Free public sources support research, but do not guarantee a complete, timely market-wide screen.
+
+For a full run, use `prompts/deep-stock-research.md`. Validate a completed JSON decision packet with `python3 scripts/decision_packet.py packet.json`. The scripts operate only on supplied inputs and do not provide a market-data feed.
