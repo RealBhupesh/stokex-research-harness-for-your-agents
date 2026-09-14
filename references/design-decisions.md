@@ -1,4 +1,15 @@
-# Decision-value filter for v2 additions
+# Decision-value filter
+
+## Version 3.0 institutional research OS
+
+- Added a fifteen-stage gated workflow because independent components did not guarantee that evidence, forecasts, risk and the final action reconciled.
+- Added world-to-stock transmission and benchmark-relative price attribution because finances alone cannot explain changing expectations, discount rates, flows or market structure.
+- Preserved unexplained price residuals because temporal proximity between news and price does not prove causality.
+- Added point-in-time packet validation, contradiction blocking and independent IC actions because a persuasive narrative or high score must not bypass a failed gate.
+- Added driver forecasts, estimate revisions, management calibration and catalyst event trees because valuation must connect to operating assumptions and a recognition path.
+- Added legal-credit, relationship, opportunity-cost and execution controls because theoretical upside can be dominated by refinancing, group exposure, alternatives, friction or inability to exit.
+- Added frozen thesis transitions and a performance lab because a research process cannot improve if it rewrites predictions after outcomes.
+- Kept data retrieval outside deterministic scripts. No authenticated live feed was configured or tested, so the package cannot claim automatic or continuous coverage.
 
 ## Version 2.1 risk and research depth
 

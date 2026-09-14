@@ -35,3 +35,18 @@ Outputs include warnings because these formulas are diagnostics. Preserve the fu
 - `backtest_metrics`: matched decimal `periodic_returns` and `benchmark_returns`, with `periods_per_year` and optional annual risk-free rate. Feed net-of-cost returns when evaluating an implementable rule.
 
 All helpers require clean, source-linked inputs. They do not fetch data, estimate parameters, classify a market regime, or prove a strategy.
+
+## STOCKEX v3 helpers
+
+These modules expose importable standard-library functions. They do not retrieve data or make recommendations.
+
+- `scripts/market_intelligence.py`: `compound_return`, `price_move_attribution`, `driver_materiality`.
+- `scripts/forecasting.py`: `driver_forecast`, `estimate_revision`, `scenario_distribution`, `guidance_score`.
+- `scripts/portfolio_execution.py`: `candidate_opportunity_cost`, `execution_estimate`, `position_risk_budget`.
+- `scripts/calibration.py`: `validate_transition`, `forecast_error`, `process_score`.
+
+Validate a complete decision packet:
+
+`python3 scripts/decision_packet.py /absolute/path/decision-packet.json`
+
+The command prints a JSON result and exits with status 1 when point-in-time, provenance, mandatory-gate, hard-stop, contradiction, legal-credit, sizing or speculative-control rules fail. Its schema is documented in `schema/decision-packet.schema.json`. Structural validity does not establish that the investment thesis is correct.

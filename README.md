@@ -1,4 +1,4 @@
-# Indian Equity Research & Decision Engine v2.1
+# STOCKEX v3 Institutional Equity Research OS
 Created 12 September 2026 and upgraded through 13 September 2026. This is a reusable research system, not a current stock recommendation or an empirically proven trading strategy.
 
 ## Start
@@ -9,37 +9,42 @@ Open `SKILL.md` in an assistant with web browsing and file access, or upload thi
 
 ![STOCKEX, evidence-first Indian equity research](assets/stockex-hero.jpg)
 
-STOCKEX is an evidence-first Indian equity research harness for objective-specific screening, valuation, risk detection and skeptical review.
+STOCKEX is an evidence-first Indian equity research operating system for conservative, compounding, tactical, event-driven and asymmetric mandates.
 
-The package includes an orchestrator, six specialist skills, point-in-time evidence rules, expectations and return-plausibility engines, a multi-layer risk detector, factor and regime analysis, forensic/trap gates, portfolio context, calibration and backtesting standards, scoring and sector guides, a financial formula library, notable-holder verification, material-news analysis, a reusable deep-research prompt, research templates and deterministic calculation helpers. All wording and code here are original. Linked third-party reports are sources, not redistributed assets or permission to redistribute market data.
+The package includes an orchestrator, eleven specialist skills, fifteen gated analyst stages, world-to-stock intelligence, price-move attribution, a point-in-time evidence room, financial normalization, driver forecasting, variant perception, catalyst underwriting, management and relationship analysis, multi-layer risk detection, legal-credit review, portfolio opportunity cost, execution simulation, adversarial IC review, thesis monitoring, calibration, a reusable deep-research prompt and deterministic validators. All wording and code here is original. Linked third-party reports are sources, not redistributed assets or permission to redistribute market data.
 
 ```mermaid
 flowchart TD
- A[Objective and constraints] --> B[Evidence and universe screen]
- B --> C{Horizon}
- C --> D[Trade setup and catalysts]
- C --> E[Business quality and valuation]
- D --> F[Risk register and hard stops]
- E --> F
- F --> J[Skeptical review]
- J --> G{Gates pass?}
- G --> H[Conditional shortlist]
- G --> I[Wait or reject]
+ A[Mandate and universe] --> B[Evidence room]
+ B --> C[World and price attribution]
+ C --> D[Business, forecast and valuation]
+ D --> E[Risk, catalysts and execution]
+ E --> F[Adversarial IC]
+ F --> G{All gates pass?}
+ G --> H[Conditional research candidate]
+ G --> I[Wait, reject or insufficient data]
+ H --> J[Monitoring and calibration]
 ```
 
 ## File map
 - `assets/stockex-hero.jpg`: repository hero and social cover image.
 - `SKILL.md`: workflow entry point.
-- `skills/`: screening, trade research, fundamentals, valuation, risk, skeptical review.
-- `references/`: intake, evidence, point-in-time controls, expectations, return plausibility, multi-layer risk detection, factor/regime, forensics, portfolio context, calibration, expert rules, sector overlays, scoring, research sources and validation cases.
+- `skills/`: screening, evidence room, market intelligence, swing research, fundamentals, variant perception, valuation, risk, skeptical review, investment committee and thesis monitoring.
+- `references/`: gated research rules for evidence, world drivers, attribution, normalization, forecasts, expectations, catalysts, management, relationships, risks, legal-credit, portfolio, execution and calibration.
 - `prompts/deep-stock-research.md`: portable full-research prompt that delays opinion until the evidence, charts, risk register and adversarial review are complete.
 - `templates/`: intake, evidence ledger, financial worksheet, shortlist, recommendation, risk register, market context, portfolio map, prediction record, monitoring, backtest report and decision journal.
 - `scripts/finance_helpers.py`: transparent arithmetic, not a stock picker or a data collector.
 - `scripts/decision_helpers.py`: return, expectations, acceleration, leakage, portfolio risk, market risk, liquidity, calibration and performance diagnostics.
+- `scripts/market_intelligence.py`: benchmark, sector and peer-relative movement plus driver-materiality checks.
+- `scripts/forecasting.py`: operating-driver bridges, estimate revisions, scenarios and guidance calibration.
+- `scripts/decision_packet.py`: point-in-time, provenance, gate, contradiction, legal-credit, sizing and speculative-control validation.
+- `scripts/portfolio_execution.py`: opportunity cost, friction, exit capacity and loss-budget sizing.
+- `scripts/calibration.py`: sourced thesis transitions, forecast error and process diagnostics.
+- `schema/decision-packet.schema.json`: machine-readable packet contract.
 - `references/design-decisions.md`: records which proposed features were included, limited or excluded and why.
 
 ## Limits
-No connected Indian live feed was tested when this package was created. Public official pages and API documentation were researched. Thresholds, weights, catalyst-freshness classifications and regime labels are configurable research hypotheses, not SEBI requirements or backtested alpha. The included backtest and calibration helpers evaluate supplied point-in-time records; they do not supply a clean historical dataset. Operational and tax rules must be refreshed when used. Research cannot make an equity suitable for a fixed near-term liability simply because it has the highest score.
+No connected Indian live feed was tested when this package was created. The new scripts validate supplied data and do not fetch prices, filings or news. Public official pages and documentation were researched. Thresholds, weights, catalyst classifications and regime labels are research hypotheses, not SEBI requirements or backtested alpha. The included helpers evaluate supplied point-in-time records; they do not supply a clean historical dataset. Operational and tax rules must be refreshed when used. Research cannot make an equity suitable for a fixed near-term liability simply because it has the highest score.
 
 ## Important warnings and limitations
 

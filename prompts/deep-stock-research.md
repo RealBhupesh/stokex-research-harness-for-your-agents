@@ -1,85 +1,126 @@
-# Deep Indian stock research prompt
+# STOCKEX v3 deep Indian stock research prompt
 
-Copy the prompt below and replace the bracketed fields. Attach the complete workflow folder or archive in the same conversation.
+Copy the prompt, replace the bracketed fields and attach the complete repository or archive.
 
 ```text
-Use the attached Indian Stock Research & Decision Engine as the controlling workflow.
+Use the attached STOCKEX Indian Equity Research OS as the controlling workflow.
 
-Research: [company name, NSE/BSE symbol or ISIN]
-Objective: [wealth creation / swing trade / income / capital preservation / compare alternatives]
+Company, NSE/BSE symbol or ISIN: [value]
+Objective: [capital preservation / long-term compounding / tactical swing / event driven / asymmetric speculation]
+Desired outcome: [return or goal]
 Horizon: [days, months or years]
-Capital available: [amount or unknown]
-Maximum tolerable loss: [rupees and/or percent]
+Capital: [amount or unknown]
+Maximum tolerable loss and drawdown: [rupees, percent or unknown]
+Total loss of allocated speculative capital acceptable: [yes / no / not applicable]
 Current holdings and weights: [list or unknown]
-Exclusions or constraints: [no leverage, sectors, liquidity, ethical constraints, etc.]
-As-of time: [now or a specified timestamp]
+Liquidity, sector, ethical or instrument constraints: [value]
+Research cutoff: [now or exact timestamp]
 
-Do not begin with a recommendation and do not force a BUY. First build a complete, timestamped evidence packet, run the risk detector and perform a skeptical review. Form an independent opinion only after these steps. If controlling evidence is missing, return INSUFFICIENT DATA and list exactly what is needed.
+Do not begin with an opinion and do not force a BUY. Complete the evidence, attribution, forecast, risk and IC gates first. If controlling evidence is missing, return INSUFFICIENT DATA and name the missing evidence.
 
-1. Verify identity and point-in-time data
-- Confirm legal issuer name, ISIN, listing symbol, exchange, security series and corporate-action-adjusted history.
-- State the exact quote, exchange timestamp, retrieval time and whether it is live, delayed or end-of-day.
-- Freeze an as-of timestamp. Exclude information that was unavailable at that time.
-- Record every material source in the source ledger with document date, period, page/table, units, consolidated/standalone basis and confidence.
+1. Freeze the mandate and universe
+- Confirm objective, horizon, loss capacity, liquidity need and exclusions.
+- Treat an extreme desired return as a search objective, not a base-case forecast.
+- Define the investable universe, benchmark, peer logic, exclusions and research cutoff.
+- Preserve every screened candidate. Do not narrow the universe after seeing the winner.
 
-2. Build the primary-source filing packet
-- Read the latest annual report in full, including accounting policies, notes, segment disclosures, auditor report, contingent liabilities, related-party transactions, debt, remuneration, dilution and subsequent events.
-- Review at least five financial years when available and the latest eight quarters, including results, cash-flow data and investor presentations.
-- Read all material NSE/BSE announcements since the last annual report, later amendments, shareholding patterns, promoter pledges/encumbrances, insider disclosures, bulk/block deals, corporate actions, credit-rating releases and material litigation/regulatory notices.
-- Use issuer presentations and concalls as management claims. Reconcile them to audited or exchange-filed evidence.
-- Prefer NSE, BSE, SEBI, MCA, RBI, credit-rating agencies and issuer investor-relations documents. Use secondary sources for discovery and independent context, not as authority for a material filing fact.
+2. Build the point-in-time evidence room
+- Confirm legal issuer, ISIN, symbol, exchange, series and corporate actions.
+- Record quote timestamp, retrieval time and live, delayed or end-of-day status.
+- Read the annual report including notes and auditor report, at least five years and eight quarters when available, and material subsequent NSE/BSE filings.
+- Review results, shareholding, pledges, insider disclosures, bulk/block deals, ratings, litigation, regulatory notices, amendments and corporate actions.
+- Record source ID, publisher, URL, period, publication time, availability time, page or table, units, consolidated or standalone basis, fact or inference and limitations.
+- Build a contradiction ledger. Exclude information unavailable at the cutoff.
 
-3. Understand the business and financial engine
-- Explain segments, customers, suppliers, geography, capacity, unit economics, cyclicality, competitive position and capital allocation.
-- Reconstruct revenue, margins, PAT, EPS, CFO, capex, free cash flow, working capital, ROIC/ROE, debt, dilution and per-share value. Reconcile reported, normalized and estimated numbers.
-- Identify what is structural, cyclical, acquisition-driven, accounting-driven or a base effect.
-- Apply only relevant formulas from the workflow. Show inputs, units, periods, calculations, applicability and limitations. Formulas are diagnostics, not automatic signals.
+3. Map the world to the stock
+- Test global growth, rates, yields, liquidity, INR and relevant currencies, commodities, power, freight, Indian macro conditions, fiscal and regulatory policy, geopolitics, trade, technology, weather, industry capacity, inventories, competitors, verified flows and company events.
+- Include a driver only when it has an evidenced path into revenue, costs, assets, liabilities, financing, valuation, risk perception, liquidity or share demand.
+- For each material driver state current condition, exposure, transmission path, lag, magnitude range, countervailing force, affected forecast line, confidence and source IDs.
+- Mark unrelated developments NOT MATERIAL.
 
-4. Map market perception and competing narratives
-- Present the strongest evidence-backed bullish thesis, bearish thesis and neutral explanation.
-- Identify management guidance, observable market expectations and price-implied expectations. Do not invent analyst consensus.
-- Verify notable institutional, promoter, insider or famous-investor involvement using dated primary disclosures and exact legal vehicles. Separate direct holdings from fund holdings, stale positions and media claims.
-- Explain recent price/volume behavior and which events appear priced in, disputed, ignored or misunderstood.
-- Search independent reporting and credible market commentary for controversies and counterevidence. Label every perception as sourced fact, attributed opinion or inference.
+4. Explain why the stock is rising or falling
+- Define the exact adjusted price window.
+- Compare total return with a broad benchmark, sector index and explicit peer basket.
+- Inspect volume, delivery, spread, volatility, gaps, circuits and liquidity.
+- Build a timestamped filing, news and macro-event timeline.
+- Test market, sector, factor, flow, technical and company-specific explanations.
+- Use peers, suppliers and customers as counterfactual evidence where valid.
+- Explain what changed in earnings expectations, discount rate, perceived risk or share supply-demand.
+- Label every proposed cause CONFIRMED, STRONGLY SUPPORTED, PLAUSIBLE or UNEXPLAINED. Preserve unexplained residuals.
 
-5. Produce charts from actual adjusted data
-- Show a five-year weekly chart, or full history if shorter, and a one-year daily chart with price and volume.
-- Add 20, 50 and 200-session moving averages where enough history exists, relative performance versus Nifty 50 and a relevant sector index, drawdown, volatility/ATR and evidence-based support/resistance zones.
-- Annotate results, guidance changes, capital raises, large corporate actions and other material events.
-- State data source, adjustment method and last observation on every chart. Never fabricate a chart or infer a technical signal from unavailable data.
-- Use technical analysis as timing and risk context. It cannot override business, valuation, governance or liquidity evidence.
+5. Understand the business, industry and relationship graph
+- Explain segments, products, customers, suppliers, geography, capacity, unit economics, cyclicality, competitive advantage and disruption risk.
+- Compare relevant peers on business drivers and economics, not only valuation multiples.
+- Map promoters, subsidiaries, associates, joint ventures, customers, suppliers, lenders, rating agencies, competitors and regulators using verified legal entities.
+- Identify concentration, related parties, guarantees, cross-holdings and economic dependencies.
 
-6. Analyze news and catalysts
-- Build a deduplicated event ledger for [12 months unless the horizon requires another period]. Separate occurrence date from publication date.
-- Link every material event to revenue, margin, cash flow, balance sheet, dilution, cost of capital, valuation or trading liquidity.
-- Scale contracts, orders, capex and legal exposures relative to company size. Mark unverified, stale, recurring and already-priced information.
-- List dated upcoming catalysts and what observable result would confirm or invalidate each one.
+6. Normalize financial history
+- Reconcile revenue, margins, PAT, EPS, CFO, capex, free cash flow, working capital, debt, dilution, ROIC or ROE and sector KPIs.
+- Keep reported and normalized figures side by side with source-backed adjustments.
+- Inspect exceptional items, capitalized costs, acquisitions, subsidies, FX, leases, receivables, inventory, contingent liabilities and related parties.
+- Use sector-specific analysis for banks, NBFCs, insurers, cyclicals and asset-heavy businesses.
+- Apply formulas only inside their valid accounting and sector domains. Show inputs, periods, units and limitations.
 
-7. Value the equity and expose expectations
-- Use methods suitable to the sector and business economics, with bear, base and bull ranges. Do not use a DCF mechanically for businesses where another framework is more defensible.
-- Reconcile enterprise value to common equity, net debt, minorities, investments, options/warrants and diluted shares.
-- Show sensitivity to the assumptions that matter most and calculate returns from the same timestamped market price.
-- Run reverse valuation to identify the growth, margin, ROE or terminal assumptions embedded in the current price. Compare those expectations with historical evidence, capacity and industry reality.
+7. Audit management credibility
+- Freeze dated guidance, capacity promises, acquisition claims, deleveraging goals, dilution statements and capital-allocation commitments.
+- Compare each promise with the actual outcome on the original deadline and basis.
+- Separate external shocks from controllable execution.
+- Track optimism bias, changing definitions, selective KPIs and recurring exceptional items.
 
-8. Run the multi-layer risk detector
-- Complete the workflow risk register across evidence, business, accounting, solvency, governance, valuation, market, liquidity, event, macro, portfolio and mandate risks.
-- Check audit issues, receivables/inventory, cash conversion, related parties, pledge, dilution, refinancing, contingencies, ASM/GSM, trade-to-trade, SME status, price bands, circuits, free float and exit capacity.
-- Calculate backward-looking volatility, beta, maximum drawdown, downside deviation and historical VaR/CVaR with stated windows. Explain that these are not maximum-loss estimates.
-- Estimate normal and stressed days-to-exit using position value, traded value and an explicit participation cap.
-- Run coherent company, sector/macro and market/liquidity stress scenarios. Do not average away a blocker.
-- Assign ACCEPTABLE, ELEVATED, HIGH or UNUNDERWRITABLE risk posture and show the evidence that would change it.
+8. Build driver forecasts and variant perception
+- Forecast operating KPIs, revenue, margins, working capital, capex, financing, tax, dilution and cash flow from explicit drivers.
+- Record driver ranges, source or derivation, historical base, correlation and disconfirming indicator.
+- Track estimate vintages and explain every revision.
+- Compare the independent forecast with sourced consensus or clearly labeled reverse-valuation expectations.
+- State what the market appears to believe, how the independent view differs, why the difference exists and what would disprove it.
 
-9. Perform an adversarial review before deciding
-- Try to disprove each thesis pillar using the strongest contradictory evidence.
-- Recheck identity, timestamps, amendments, units, cash-flow reconciliation, dilution, formula inputs, valuation bridge, holder claims, event dates, chart dates and portfolio concentration.
-- Rank review findings as BLOCKER, MATERIAL or MINOR. Fix them or carry them visibly into the result.
+9. Build scenarios and valuation
+- Create internally consistent bear, base and bull financial statements and valuation ranges.
+- Use at least two suitable methods when the business permits and reconcile differences.
+- Bridge enterprise value to common equity, net debt, minorities, investments, options, warrants and diluted shares.
+- Show sensitivities and returns from the same timestamped price.
+- Use probabilities only when explicitly supported and make them sum to 100%. Otherwise show ranges without expected value.
+- Run reverse valuation and state when terminal value, exit multiples or commodity assumptions dominate.
 
-10. Form the independent opinion
-- Return only RESEARCH CANDIDATE, WATCH, REJECT, SCREEN ONLY or INSUFFICIENT DATA.
-- Lead with a one-sentence opinion tied to my objective and horizon. Separate fact, assumption and inference.
-- Compare at least three relevant peers and a diversified benchmark alternative when appropriate.
-- State what must be true, what appears priced in, the strongest bear case, top failure paths, valuation range, conditional entry or wait conditions, invalidation, monitoring triggers and next review date.
-- Give personalized position size or share count only if capital, holdings, liquidity and approved risk limits are known. Otherwise provide formulas and scenarios only.
-- Cite every material factual claim beside the claim. Include limitations and unresolved evidence conflicts.
-- Do not promise returns, claim certainty, fabricate consensus or holders, treat headlines as proof, or execute an order.
+10. Underwrite catalysts
+- For every catalyst state event window, affected market belief, evidence, leading indicators, positive/base/negative interpretation, what is priced in, delay rule and failure mode.
+- Build an event tree for success, partial success, delay and failure.
+- Connect each branch to forecasts, valuation, liquidity and downside.
+- Reject time-bound ideas without a plausible recognition mechanism.
+
+11. Produce technical and market-structure evidence
+- Create a five-year weekly and one-year daily chart when data permits, using adjusted price and volume.
+- Show relevant moving averages, benchmark and sector relative strength, drawdown, volatility or ATR and evidence-based support and resistance.
+- Annotate results, guidance, financing and material events.
+- State source, adjustment and last observation on every chart. Never fabricate charts.
+- Use technical evidence for timing, positioning and risk, never to override governance or valuation.
+
+12. Run risk, forensic, legal and credit checks
+- Complete mandate, evidence, accounting, governance, business, balance-sheet, legal, regulatory, market, factor, liquidity, valuation, catalyst, portfolio, execution and model risks.
+- Check auditors, cash conversion, receivables, inventory, related parties, promoter pledge, dilution, refinancing, defaults, guarantees, ratings, court or IBBI matters, contingencies and group exposure.
+- Check free float, ASM/GSM, SME or trade-to-trade status, bands, circuits and normal and stressed exit capacity.
+- Calculate descriptive volatility, beta, drawdown, downside deviation and historical VaR/CVaR with stated windows and limitations.
+- Run coherent company, macro-sector and liquidity stresses. Do not average away a hard stop.
+
+13. Compare alternatives, portfolio fit and execution
+- Compare the candidate with cash or a suitable low-risk alternative, a diversified Indian benchmark and the strongest peer using the same horizon and assumptions.
+- Show before-and-after sector, factor, commodity, currency, promoter-group and catalyst concentration when holdings are known.
+- Estimate spread, slippage, fees, taxes, participation capacity and entry and exit sessions.
+- Size only from complete portfolio, loss-budget, cash, concentration and liquidity inputs. Otherwise show formulas.
+
+14. Perform an independent adversarial IC review
+- Try to disprove every thesis pillar and challenge what is already priced.
+- Recheck identity, timestamps, units, normalization, forecasts, valuation bridge, holder claims, catalysts, legal-credit exposure, liquidity and alternatives.
+- Rank findings BLOCKER, MATERIAL or MINOR and preserve dissent.
+- Return only APPROVE FOR CONSIDERATION, APPROVE WITH CONDITIONS, RETURN FOR WORK or VETO.
+- Never let a score override a failed gate or unresolved controlling contradiction.
+
+15. Form, freeze and monitor the opinion
+- Return RESEARCH CANDIDATE, SPECULATIVE RESEARCH CANDIDATE, WATCH, REJECT, SCREEN ONLY or INSUFFICIENT DATA.
+- Lead with a one-sentence objective-specific conclusion and IC action.
+- State variant perception, what must be true, what appears priced, price-move attribution, scenario reward and downside, strongest bear case, hard risks, opportunity cost, execution limits, conditions and invalidation.
+- Freeze the evidence cutoff, forecast ranges, probabilities, price, catalysts, risks, decision, model version and packet hash.
+- Define active triggers, affected stages and next review. Do not claim continuous monitoring without a configured feed or automation.
+- Cite material facts beside each claim. Separate facts, calculations, assumptions and inferences.
+- Do not promise returns, fabricate consensus or holders, treat news as proof, or execute an order.
 ```
