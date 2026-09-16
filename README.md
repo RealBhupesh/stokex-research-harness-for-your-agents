@@ -43,8 +43,35 @@ flowchart TD
 - `schema/decision-packet.schema.json`: machine-readable packet contract.
 - `references/design-decisions.md`: records which proposed features were included, limited or excluded and why.
 
+## Offline point-in-time evidence store
+
+The first executable release is an offline local SQLite evidence store. It
+accepts supplied JSONL records and does not scrape exchanges, download data,
+or guarantee source authenticity or dataset completeness. Initialize and use
+it with commands such as:
+
+```bash
+python -m stockex.cli init research.sqlite3
+python -m stockex.cli ingest research.sqlite3 evidence.jsonl
+python -m stockex.cli packet research.sqlite3 INE000A01001 --cutoff 2026-06-01T10:00:00+05:30
+python -m stockex.cli integrity research.sqlite3
+```
+
+The packet command selects only records available by the supplied cutoff. The
+integrity command checks internal database consistency; a valid result does not
+prove that the supplied evidence is authentic, complete or investment-grade.
+Keep runtime databases and generated packets outside the repository.
+
 ## Limits
-No connected Indian live feed was tested when this package was created. The new scripts validate supplied data and do not fetch prices, filings or news. Public official pages and documentation were researched. Thresholds, weights, catalyst classifications and regime labels are research hypotheses, not SEBI requirements or backtested alpha. The included helpers evaluate supplied point-in-time records; they do not supply a clean historical dataset. Operational and tax rules must be refreshed when used. Research cannot make an equity suitable for a fixed near-term liability simply because it has the highest score.
+No connected Indian live feed was tested when this package was created. The
+offline store and scripts validate supplied data and do not fetch prices,
+filings or news. Public official pages and documentation were researched.
+Thresholds, weights, catalyst classifications and regime labels are research
+hypotheses, not SEBI requirements or backtested alpha. The included helpers
+evaluate supplied point-in-time records; they do not supply a clean historical
+dataset. Operational and tax rules must be refreshed when used. Research
+cannot make an equity suitable for a fixed near-term liability simply because
+it has the highest score.
 
 ## Important warnings and limitations
 

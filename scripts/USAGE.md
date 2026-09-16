@@ -1,3 +1,20 @@
+# Offline point-in-time store
+
+The first executable release is an offline local SQLite evidence store. It
+accepts supplied records and does not scrape exchanges or guarantee source
+authenticity or completeness. Run these commands from the repository root:
+
+```bash
+python -m stockex.cli init research.sqlite3
+python -m stockex.cli ingest research.sqlite3 evidence.jsonl
+python -m stockex.cli packet research.sqlite3 INE000A01001 --cutoff 2026-06-01T10:00:00+05:30
+python -m stockex.cli integrity research.sqlite3
+```
+
+The packet is restricted to evidence available at the cutoff. The integrity
+report checks internal consistency only, not source authenticity, dataset
+completeness or investment suitability.
+
 # Calculation helper
 Python standard library only. No credentials, market-data access or orders.
 

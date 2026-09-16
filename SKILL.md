@@ -20,7 +20,13 @@ IC actions: `APPROVE FOR CONSIDERATION`, `APPROVE WITH CONDITIONS`, `RETURN FOR 
 
 1. **Mandate:** freeze objective, horizon, loss and liquidity constraints.
 2. **Universe:** use [screening](skills/india-equity-screen/SKILL.md) and preserve inclusion and exclusion logic.
-3. **Evidence room:** use [evidence-room](skills/india-equity-evidence-room/SKILL.md), [evidence gates](references/evidence-gates.md) and [point-in-time rules](references/point-in-time.md). Missing controlling evidence forces `INSUFFICIENT DATA`, `WATCH` or `REJECT`.
+3. **Evidence room:** use [evidence-room](skills/india-equity-evidence-room/SKILL.md), [evidence gates](references/evidence-gates.md) and [point-in-time rules](references/point-in-time.md). When a STOCKEX database is supplied, require a stable security identity (security ID or ISIN) and a user-specified cutoff timestamp, then generate the point-in-time packet before analysis:
+
+   ```text
+   python -m stockex.cli packet DATABASE SECURITY_ID --cutoff TIMESTAMP
+   ```
+
+   Route integrity interpretation to the evidence-room contract. When no database exists, preserve the manual primary-source evidence ledger and contradiction workflow. Missing controlling evidence forces `INSUFFICIENT DATA`, `WATCH` or `REJECT`.
 4. **World and market map:** use [market intelligence](skills/india-equity-market-intelligence/SKILL.md) and [world-to-stock transmission](references/world-to-stock-transmission.md). Include external drivers only when a material transmission path exists.
 5. **Price-move attribution:** explain material rises and falls relative to a broad benchmark, sector and peers. Preserve `UNEXPLAINED` residuals and never infer causality from headline timing alone.
 6. **Business and industry:** route multi-year ownership to [fundamental research](skills/india-fundamental-research/SKILL.md). Map economics, competition and [company relationships](references/relationship-graph.md).

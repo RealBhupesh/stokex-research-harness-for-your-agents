@@ -27,6 +27,23 @@
 
 “Test model version [version] using this point-in-time dataset. Reject future information and current-survivor universes, use walk-forward windows and realistic costs, preserve an untouched holdout, then complete the backtest and calibration reports.”
 
+## Local point-in-time store
+
+The first executable release is an offline local SQLite evidence store. It
+works only with evidence you supply. It does not scrape exchanges and cannot
+guarantee source authenticity or dataset completeness. The basic workflow is:
+
+```bash
+python -m stockex.cli init research.sqlite3
+python -m stockex.cli ingest research.sqlite3 evidence.jsonl
+python -m stockex.cli packet research.sqlite3 INE000A01001 --cutoff 2026-06-01T10:00:00+05:30
+python -m stockex.cli integrity research.sqlite3
+```
+
+Use a stable security ID or ISIN and a timezone-aware cutoff. A passing
+integrity result confirms internal consistency only. It does not establish
+authenticity, completeness, suitability or predictive power.
+
 ## Optional local discovery
 Copy the full `indian-stock-research` folder to your assistant's supported skill directory, commonly `~/.codex/skills/`. Keep all references and subfolders together. For another platform, use its documented skill import mechanism or load `SKILL.md` manually. This archive is portable, not automatically installed in every chat. The specialist folders can be read by the orchestrator without installing them separately.
 

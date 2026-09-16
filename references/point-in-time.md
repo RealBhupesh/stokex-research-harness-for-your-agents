@@ -22,3 +22,22 @@ At a decision timestamp `T`, use the latest authoritative observation whose `ava
 ## Gate
 
 Live research may proceed with clearly dated current evidence. A performance claim, learned weight or historical hit rate is BLOCKED until the dataset passes availability, universe, corporate-action, delisting and cost checks. Run `scripts/decision_helpers.py point_in_time` on structured records as a basic timestamp check; it does not prove dataset completeness.
+
+## Local executable workflow
+
+The first executable release is an offline local SQLite evidence store. It
+uses only records supplied by the user or an approved provider adapter. It
+does not scrape exchanges or guarantee source authenticity or completeness.
+Use these commands from the repository root:
+
+```bash
+python -m stockex.cli init research.sqlite3
+python -m stockex.cli ingest research.sqlite3 evidence.jsonl
+python -m stockex.cli packet research.sqlite3 INE000A01001 --cutoff 2026-06-01T10:00:00+05:30
+python -m stockex.cli integrity research.sqlite3
+```
+
+`packet` reconstructs the evidence eligible at the cutoff. `integrity`
+checks internal consistency only. A valid report does not establish that the
+underlying sources are authentic or that the dataset is complete enough for a
+backtest or investment decision.
