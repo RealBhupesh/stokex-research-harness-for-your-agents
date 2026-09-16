@@ -1,3 +1,9 @@
 __pycache__/
 *.pyc
 .worktrees/
+*.sqlite
+*.sqlite3
+*.db
+evidence-packet-*.json
+stockex-output/
+.superpowers/

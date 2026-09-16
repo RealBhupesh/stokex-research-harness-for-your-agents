@@ -1,5 +1,5 @@
 {
-  "version": "3.0.0",
+  "version": "4.0.0-dev1",
   "created": "2026-09-13",
   "entrypoint": "SKILL.md",
   "specialist_skills": [
@@ -15,7 +15,7 @@
     "india-equity-investment-committee",
     "india-equity-thesis-monitor"
   ],
-  "data_integrations": "documentation only; no authenticated live feed tested",
+  "data_integrations": "offline local SQLite evidence store only; no scraping, authenticated live feed, source-authenticity or completeness guarantee",
   "performance_status": "not backtested; calibration requires supplied point-in-time records",
   "files": [
     ".gitignore",
@@ -24,7 +24,9 @@
     "SKILL.md",
     "assets/stockex-hero.jpg",
     "docs/superpowers/plans/2026-09-13-stockex-v3-implementation.md",
+    "docs/superpowers/plans/2026-09-15-point-in-time-data-foundation.md",
     "docs/superpowers/specs/2026-09-13-institutional-equity-research-os-design.md",
+    "docs/superpowers/specs/2026-09-15-point-in-time-data-foundation-design.md",
     "manifest.json",
     "prompts/deep-stock-research.md",
     "references/active-research-triggers.md",
@@ -85,6 +87,13 @@
     "skills/india-equity-variant-perception/SKILL.md",
     "skills/india-fundamental-research/SKILL.md",
     "skills/india-swing-research/SKILL.md",
+    "stockex/__init__.py",
+    "stockex/cli.py",
+    "stockex/store/__init__.py",
+    "stockex/store/database.py",
+    "stockex/store/importer.py",
+    "stockex/store/records.py",
+    "stockex/store/schema.py",
     "templates/backtest-report.md",
     "templates/catalyst-calendar.md",
     "templates/decision-journal.md",
@@ -113,6 +122,11 @@
     "tests/test_market_intelligence.py",
     "tests/test_portfolio_execution.py",
     "tests/test_repository_integrity.py",
-    "tests/test_risk_helpers.py"
+    "tests/test_risk_helpers.py",
+    "tests/test_store_cli.py",
+    "tests/test_store_database.py",
+    "tests/test_store_queries.py",
+    "tests/test_store_records.py",
+    "tests/test_store_schema.py"
   ]
 }
