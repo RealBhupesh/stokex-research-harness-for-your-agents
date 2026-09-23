@@ -154,6 +154,30 @@ def validate_packet(packet):
                 "Speculative approval requires capped capital, accepted total-loss risk, a dated catalyst, two-sided exit plans and passed liquidity",
             )
 
+    if approving and mandate.get("mode") == "AGGRESSIVE_SHORT_TERM":
+        plan = packet.get("trade_plan") if isinstance(packet.get("trade_plan"), dict) else {}
+
+        def positive(name):
+            value = plan.get(name)
+            return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+
+        prices_valid = all(positive(name) for name in ("entry", "stop", "target")) and (
+            plan["stop"] < plan["entry"] < plan["target"]
+        )
+        time_stop = plan.get("time_stop_sessions")
+        if not (
+            prices_valid
+            and isinstance(time_stop, int) and not isinstance(time_stop, bool) and 1 <= time_stop <= 20
+            and positive("position_size_rupees")
+            and plan.get("liquidity_passed") is True
+        ):
+            _error(
+                errors,
+                "TRADE_PLAN_MISSING",
+                "trade_plan",
+                "Aggressive short-term approval requires entry, stop below entry, target above entry, a 1-20 session time stop, a position size and passed liquidity",
+            )
+
     if not sources:
         warnings.append({"code": "NO_EVIDENCE_TO_REVIEW", "message": "No evidence records were available for point-in-time checks"})
     all_required_passed = not missing_gates and not failed_gates and not invalid_gates

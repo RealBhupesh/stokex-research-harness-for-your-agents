@@ -121,6 +121,23 @@ class DecisionPacketValidationTests(unittest.TestCase):
         }
         self.assertTrue(validate_packet(packet)["valid"])
 
+    def test_aggressive_short_term_approval_requires_complete_trade_plan(self):
+        packet = valid_packet()
+        packet["mandate"].update(mode="AGGRESSIVE_SHORT_TERM", horizon="5 trading days")
+        result = validate_packet(packet)
+        self.assertIn("TRADE_PLAN_MISSING", [error["code"] for error in result["errors"]])
+
+        packet["trade_plan"] = {
+            "entry": 101.1, "stop": 98.0, "target": 110.4, "time_stop_sessions": 7,
+            "position_size_rupees": 200_000, "liquidity_passed": True, "setup": "BREAKOUT_52W",
+        }
+        self.assertTrue(validate_packet(packet)["valid"])
+        for broken in ({"stop": 102.0}, {"time_stop_sessions": 0}, {"liquidity_passed": False}, {"target": 100.0}):
+            with self.subTest(broken=broken):
+                bad = copy.deepcopy(packet)
+                bad["trade_plan"].update(broken)
+                self.assertIn("TRADE_PLAN_MISSING", [error["code"] for error in validate_packet(bad)["errors"]])
+
     def test_approval_action_must_match_research_status(self):
         packet = valid_packet()
         packet["decision"]["research_status"] = "REJECT"

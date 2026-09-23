@@ -1,5 +1,14 @@
 # Decision-value filter
 
+## Version 5.0 short-term setups and market-data signals
+
+- Added short-term and technical setups (`BREAKOUT_52W`, `BASE_BREAKOUT_VCP`, `PULLBACK_UPTREND`, `DELIVERY_ACCUMULATION`, `DEAL_FOLLOW_THROUGH`, `EARNINGS_GAP_DRIFT`, `RS_LEADER_IN_WEAK_TAPE`) and F&O-derived signals (`LONG_BUILDUP`, `SHORT_COVERING`, rollover, ban status). The v2 filter excluded unvalidated technical indicators. That condition is now met: the walk-forward backtester (`python -m stockex.cli backtest`) supplies out-of-sample evidence for each frozen setup definition.
+- A setup without a measured edge (fewer than 30 scorecard trades, or non-positive expectancy) is labelled `UNPROVEN` and ranked below proven setups. It is never presented as an edge.
+- F&O data is used as a positioning signal only. The harness does not recommend futures or options trades.
+- NSE end-of-day files are imported from user or agent-browser downloads (`python -m stockex.cli market-import`). No scraping or automated retrieval is implemented.
+- Added `AGGRESSIVE_SHORT_TERM` as a first-class mandate served by [momentum trading](../skills/india-momentum-trading/SKILL.md). The hard risk plan per pick replaces reframing, so an aggressive request gets a disciplined answer rather than a redirect.
+- Added the [analyst playbook](analyst-playbook.md), [short-term playbook](short-term-playbook.md), [market calendar](india-market-calendar.md) and [sector KPIs](sector-kpis.md) so that agents apply specific Indian-market checks, sources and invalidation rules instead of generic reasoning.
+
 ## Version 3.0 institutional research OS
 
 - Added a fifteen-stage gated workflow because independent components did not guarantee that evidence, forecasts, risk and the final action reconciled.

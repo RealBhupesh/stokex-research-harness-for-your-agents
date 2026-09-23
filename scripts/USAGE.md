@@ -67,3 +67,16 @@ Validate a complete decision packet:
 `python3 scripts/decision_packet.py /absolute/path/decision-packet.json`
 
 The command prints a JSON result and exits with status 1 when point-in-time, provenance, mandatory-gate, hard-stop, contradiction, legal-credit, sizing or speculative-control rules fail. Its schema is documented in `schema/decision-packet.schema.json`. Structural validity does not establish that the investment thesis is correct.
+
+# Short-term scanner and backtester
+
+The `stockex` package also imports NSE end-of-day files and runs the short-term
+setups. See the README section "Aggressive short-term mode":
+
+```bash
+python -m stockex.cli market-import market.sqlite3 downloads/*.csv
+python -m stockex.cli backtest market.sqlite3 --from 2025-10-01 --to 2026-08-31 --out scorecard.json
+python -m stockex.cli scan market.sqlite3 --as-of 2026-09-22 --capital 500000 --scorecard scorecard.json --format md
+```
+
+Position sizing in the scanner matches `finance_helpers.size_cash_trade`.

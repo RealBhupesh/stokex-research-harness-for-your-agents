@@ -14,6 +14,17 @@ Backtesting tests a fully specified rule. It does not validate discretionary hin
 
 LLMs can remember historical outcomes, so historical narrative evaluation must be constrained to a dated evidence packet. Do not call the included metric calculator a backtest engine; it only scores supplied realized returns.
 
+## Setup scorecards
+
+A short-term setup (for example `BREAKOUT_52W` or `LONG_BUILDUP`) earns a rank only from a scorecard produced by `python -m stockex.cli backtest DATABASE --from D1 --to D2 --out scorecard.json`.
+
+- Freeze the setup's parameters (lookbacks, thresholds, entry, stop, targets, time stop, costs) before running.
+- Walk forward. Signals use only data available at each session's close, and entries use the next executable price.
+- Require at least 30 trades per setup before treating the hit rate or expectancy as evidence. Fewer trades, or expectancy at or below zero after costs, means `UNPROVEN`.
+- Compare each setup's trades with Nifty over the same holding days. A setup that only matches the index in a rising market has no edge.
+- A changed parameter is a new setup. Re-test it on a new out-of-sample period that was not used to choose the change.
+- Never tune on the evaluation window, and never let the scan's `--as-of` date fall inside the scorecard window.
+
 ## Prediction journal
 
 Before the outcome, freeze prediction ID, decision timestamp, evidence packet hash or source ledger, horizon, benchmark, expected range, scenario probabilities, thesis, catalyst, invalidation and decision. Do not edit the original record after outcome observation; append a review.

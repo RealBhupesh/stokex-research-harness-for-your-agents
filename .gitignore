@@ -7,3 +7,4 @@ __pycache__/
 evidence-packet-*.json
 stockex-output/
 .superpowers/
+scorecard*.json

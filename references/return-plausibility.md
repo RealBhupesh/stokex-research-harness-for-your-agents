@@ -18,3 +18,7 @@ Do not use fixed universal cutoffs as empirical truth. Support the classificatio
 If a probability is requested, name the model and inputs. The included GBM estimate is only a lognormal sensitivity using assumed annual drift and volatility. It ignores jumps, circuits, liquidity, parameter uncertainty and changing regimes. Report probabilities across a range of plausible inputs, never a single precise number as fact. Historical hit rates require point-in-time backtesting.
 
 Output required return, annualized equivalent, scenario losses, assumptions, classification, and whether the mandate should be reframed. The harness may still research speculative candidates, but the final decision must not describe the desired outcome as likely without evidence.
+
+## AGGRESSIVE_SHORT_TERM
+
+For the 1–10 trading day mandate, compute and show the same return math: the required return, the per-trade R multiple and win rate the target implies at the configured risk per trade, and the loss at the daily and weekly limits. Reframing is not required. Research proceeds under [momentum trading](../skills/india-momentum-trading/SKILL.md), where every pick carries an entry trigger, stop, targets, time stop and size, and setups without a measured edge are labelled `UNPROVEN`.

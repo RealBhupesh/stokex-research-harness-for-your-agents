@@ -8,9 +8,9 @@ Produce an objective-specific, evidence-backed research decision. "Best" means b
 
 ## Intake and outcomes
 
-Read [intake](references/intake.md) and select one mandate: capital preservation, long-term compounding, tactical swing, event driven or asymmetric speculation. Record objective, horizon, loss capacity, liquidity need, exclusions, capital and holdings. Unknown capital or holdings blocks personalized sizing, not conditional research.
+Read [intake](references/intake.md) and select one mandate: capital preservation, long-term compounding, tactical swing, event driven, asymmetric speculation or aggressive short-term (1–10 trading days). Record objective, horizon, loss capacity, liquidity need, exclusions, capital and holdings. Unknown capital or holdings blocks personalized sizing, not conditional research.
 
-An extreme target such as 100% in two months is a search objective. Route it to asymmetric speculation, run [return plausibility](references/return-plausibility.md), require capped capital at risk and accept that no candidate may qualify.
+An extreme target such as 100% in two months is a search objective. Route it to asymmetric speculation, run [return plausibility](references/return-plausibility.md), require capped capital at risk and accept that no candidate may qualify. An aggressive short-term request (`AGGRESSIVE_SHORT_TERM`) is not reframed; route it to [momentum trading](skills/india-momentum-trading/SKILL.md), which requires a hard risk plan for every pick.
 
 Research statuses: `RESEARCH CANDIDATE`, `SPECULATIVE RESEARCH CANDIDATE`, `WATCH`, `REJECT`, `SCREEN ONLY`, `INSUFFICIENT DATA`.
 
@@ -29,11 +29,11 @@ IC actions: `APPROVE FOR CONSIDERATION`, `APPROVE WITH CONDITIONS`, `RETURN FOR 
    Optionally run advisory `jev-triage` on the same packet to queue source-class, claim, materiality and conflict checks ([Jev triage](references/jev-triage.md)); its flags never change a gate. Route integrity interpretation to the evidence-room contract. When no database exists, preserve the manual primary-source evidence ledger and contradiction workflow. Missing controlling evidence forces `INSUFFICIENT DATA`, `WATCH` or `REJECT`.
 4. **World and market map:** use [market intelligence](skills/india-equity-market-intelligence/SKILL.md) and [world-to-stock transmission](references/world-to-stock-transmission.md). Include external drivers only when a material transmission path exists.
 5. **Price-move attribution:** explain material rises and falls relative to a broad benchmark, sector and peers. Preserve `UNEXPLAINED` residuals and never infer causality from headline timing alone.
-6. **Business and industry:** route multi-year ownership to [fundamental research](skills/india-fundamental-research/SKILL.md). Map economics, competition and [company relationships](references/relationship-graph.md).
-7. **Financial normalization:** reconcile filings using [financial normalization](references/financial-normalization.md), sector overlays and applicable [formula diagnostics](references/formulas.md).
+6. **Business and industry:** route multi-year ownership to [fundamental research](skills/india-fundamental-research/SKILL.md). Map economics, competition and [company relationships](references/relationship-graph.md). Work through the [analyst playbook](references/analyst-playbook.md) checklist and its qualify/watch/reject grid.
+7. **Financial normalization:** reconcile filings using [financial normalization](references/financial-normalization.md), sector overlays ([sector KPIs](references/sector-kpis.md)) and applicable [formula diagnostics](references/formulas.md).
 8. **Expectations and variant:** use [variant perception](skills/india-equity-variant-perception/SKILL.md). Compare sourced consensus or reverse expectations with an independent driver forecast.
 9. **Forecast and valuation:** use [forecast policy](references/forecast-policy.md) and [valuation](skills/india-equity-valuation/SKILL.md). Build coherent bear, base and bull cases. Do not invent probabilities.
-10. **Market structure:** route days-to-months work to [swing research](skills/india-swing-research/SKILL.md). Use actual dated charts, price, volume, delivery and liquidity data.
+10. **Market structure:** route days-to-months work to [swing research](skills/india-swing-research/SKILL.md). Route `AGGRESSIVE_SHORT_TERM` (1–10 trading days) to [momentum trading](skills/india-momentum-trading/SKILL.md) with the [short-term playbook](references/short-term-playbook.md) and [market calendar](references/india-market-calendar.md). Use actual dated charts, price, volume, delivery and liquidity data.
 11. **Risk and forensics:** use [risk](skills/india-equity-risk/SKILL.md), [risk detection](references/risk-detection.md), [forensics](references/forensics-and-traps.md) and [legal-credit intelligence](references/legal-credit-intelligence.md). Hard stops remain independent.
 12. **Catalysts:** use [catalyst underwriting](references/catalyst-underwriting.md). A catalyst must change expectations, economics, risk or share demand.
 13. **Decision and sizing:** compare a diversified benchmark and strongest alternative using [portfolio and opportunity cost](references/portfolio-and-opportunity-cost.md). Use [execution simulation](references/execution-simulation.md). Size only with complete inputs.
