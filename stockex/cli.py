@@ -7,6 +7,8 @@ from pathlib import Path
 import sqlite3
 import sys
 
+from .jev.client import DEFAULT_MODEL, JevClient, JevError
+from .jev.triage import DEFAULT_CONFIDENCE_FLOOR, triage_packet
 from .store.database import PointInTimeStore
 from .store.importer import ImportFailure, import_jsonl
 from .store.records import StoreValidationError
@@ -49,7 +51,41 @@ def _parser() -> argparse.ArgumentParser:
 
     integrity = commands.add_parser("integrity", help="check store integrity")
     integrity.add_argument("database", type=Path)
+
+    jev = commands.add_parser("jev-triage", help="advisory Jev triage of a cutoff evidence packet")
+    jev.add_argument("database", type=Path)
+    jev.add_argument("security_id")
+    jev.add_argument("--cutoff", required=True)
+    jev.add_argument("--excerpts", type=Path, help="JSONL of {source_id, text} excerpts")
+    jev.add_argument("--confidence-floor", type=float, default=DEFAULT_CONFIDENCE_FLOOR)
+    jev.add_argument("--model", default=DEFAULT_MODEL)
     return parser
+
+
+def jev_client_factory(model: str) -> JevClient:
+    """Build the Jev client; tests replace this to avoid network calls."""
+    return JevClient(model=model)
+
+
+def _read_excerpts(path: Path | None) -> dict[str, str]:
+    if path is None:
+        return {}
+    excerpts: dict[str, str] = {}
+    with path.open(encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, 1):
+            if not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+            except ValueError as error:
+                raise ValueError(f"{path}:{line_number}: invalid JSON: {error}") from error
+            source_id, text = (item.get("source_id"), item.get("text")) if isinstance(item, dict) else (None, None)
+            if not isinstance(source_id, str) or not source_id or not isinstance(text, str):
+                raise ValueError(f"{path}:{line_number}: each line needs string source_id and text")
+            if source_id in excerpts:
+                raise ValueError(f"{path}:{line_number}: duplicate excerpt for {source_id}")
+            excerpts[source_id] = text
+    return excerpts
 
 
 def _json_output(payload: object) -> str:
@@ -85,6 +121,11 @@ def _run(args: argparse.Namespace) -> object:
             return store.evidence_packet(args.security_id, args.cutoff, fields or None)
         if args.command == "integrity":
             return store.integrity_report()
+        if args.command == "jev-triage":
+            excerpts = _read_excerpts(args.excerpts)
+            client = jev_client_factory(args.model)
+            packet = store.evidence_packet(args.security_id, args.cutoff)
+            return triage_packet(packet, excerpts, client, confidence_floor=args.confidence_floor)
     raise ValueError(f"Unknown command: {args.command}")
 
 
@@ -96,6 +137,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except ImportFailure as error:
         print(_json_output(asdict(error)), file=sys.stderr)
+    except JevError as error:
+        print(_json_output(_error_payload(error.code, error.message)), file=sys.stderr)
     except StoreValidationError as error:
         print(_json_output(_error_payload(error.code, error.message, path=error.path)), file=sys.stderr)
     except ValueError as error:

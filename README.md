@@ -62,7 +62,17 @@ integrity command checks internal database consistency; a valid result does not
 prove that the supplied evidence is authentic, complete or investment-grade.
 Keep runtime databases and generated packets outside the repository.
 
-## Limits
+## Optional Jev evidence triage
+
+`python -m stockex.cli jev-triage` sends each cutoff-valid packet source (and an
+optional text excerpt) to TypeSafe AI's Jev decision model with a fixed,
+versioned question bank. It returns calibrated judgments on source class, fact
+versus claim, materiality, restatement and whether store conflicts are
+substantive, plus a review queue of low-confidence or suspicious items. It
+needs `TYPESAFE_API_KEY`, uses only the Python standard library and is
+advisory: it never changes evidence, gates or decisions. See
+[Jev triage](references/jev-triage.md).
+
 No connected Indian live feed was tested when this package was created. The
 offline store and scripts validate supplied data and do not fetch prices,
 filings or news. Public official pages and documentation were researched.
