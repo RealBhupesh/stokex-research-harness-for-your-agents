@@ -26,7 +26,7 @@ IC actions: `APPROVE FOR CONSIDERATION`, `APPROVE WITH CONDITIONS`, `RETURN FOR 
    python -m stockex.cli packet DATABASE SECURITY_ID --cutoff TIMESTAMP
    ```
 
-   Route integrity interpretation to the evidence-room contract. When no database exists, preserve the manual primary-source evidence ledger and contradiction workflow. Missing controlling evidence forces `INSUFFICIENT DATA`, `WATCH` or `REJECT`.
+   Optionally run advisory `jev-triage` on the same packet to queue source-class, claim, materiality and conflict checks ([Jev triage](references/jev-triage.md)); its flags never change a gate. Route integrity interpretation to the evidence-room contract. When no database exists, preserve the manual primary-source evidence ledger and contradiction workflow. Missing controlling evidence forces `INSUFFICIENT DATA`, `WATCH` or `REJECT`.
 4. **World and market map:** use [market intelligence](skills/india-equity-market-intelligence/SKILL.md) and [world-to-stock transmission](references/world-to-stock-transmission.md). Include external drivers only when a material transmission path exists.
 5. **Price-move attribution:** explain material rises and falls relative to a broad benchmark, sector and peers. Preserve `UNEXPLAINED` residuals and never infer causality from headline timing alone.
 6. **Business and industry:** route multi-year ownership to [fundamental research](skills/india-fundamental-research/SKILL.md). Map economics, competition and [company relationships](references/relationship-graph.md).

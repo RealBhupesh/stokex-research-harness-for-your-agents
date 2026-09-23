@@ -2,9 +2,12 @@ import contextlib
 import io
 import json
 import pathlib
+import os
 import tempfile
 import unittest
+from unittest import mock
 
+from stockex import cli
 from stockex.cli import main
 from stockex.store.database import PointInTimeStore
 from stockex.store.importer import ImportFailure, import_jsonl
@@ -241,6 +244,54 @@ class CliTests(unittest.TestCase):
         code, payload, error = self.call(["ingest", str(self.database), str(self.source)])
         self.assertEqual((code, payload), (2, None))
         self.assertEqual((error["path"], error["line"], error["code"]), (str(self.source), 1, "JSON_INVALID"))
+
+    def test_jev_triage_outputs_advisory_report(self):
+        write_jsonl(self.source, synthetic_envelopes())
+        self.call(["ingest", str(self.database), str(self.source)])
+        excerpts = self.root / "excerpts.jsonl"
+        excerpts.write_text(json.dumps({"source_id": "source_example", "text": "Revenue Rs 100 crore"}) + "\n", encoding="utf-8")
+
+        class StubClient:
+            def evaluate(self, state, questions):
+                answers = {}
+                for question_id, spec in questions.items():
+                    if spec["type"] == "noul":
+                        answers[question_id] = {"type": "noul", "noul": 0.1}
+                    else:
+                        option = next(iter(spec["criteria"]))
+                        answers[question_id] = {"type": spec["type"], spec["type"]: option, "confidence": 0.9}
+                return {"model": "jev-stub", "answers": answers}
+
+        models = []
+        with mock.patch.object(cli, "jev_client_factory", lambda model: models.append(model) or StubClient()):
+            code, payload, error = self.call([
+                "jev-triage", str(self.database), "SEC_EXAMPLE", "--cutoff", "2026-06-01T00:00:00Z",
+                "--excerpts", str(excerpts), "--model", "jev-test",
+            ])
+        self.assertEqual((code, error, models), (0, None, ["jev-test"]))
+        self.assertTrue(payload["advisory_only"])
+        self.assertEqual(payload["sources"][0]["source_id"], "source_example")
+        self.assertTrue(payload["sources"][0]["has_excerpt"])
+        self.assertEqual(payload["jev_models"], ["jev-stub"])
+
+    def test_jev_triage_without_api_key_is_structured_error(self):
+        write_jsonl(self.source, synthetic_envelopes())
+        self.call(["ingest", str(self.database), str(self.source)])
+        with mock.patch.dict(os.environ, {}, clear=True):
+            code, payload, error = self.call([
+                "jev-triage", str(self.database), "SEC_EXAMPLE", "--cutoff", "2026-06-01T00:00:00Z",
+            ])
+        self.assertEqual((code, payload, error["code"]), (2, None, "JEV_CONFIG_MISSING"))
+
+    def test_jev_triage_rejects_malformed_excerpts(self):
+        excerpts = self.root / "excerpts.jsonl"
+        excerpts.write_text('{"source_id": "a"}\n', encoding="utf-8")
+        self.assertEqual(self.call(["init", str(self.database)])[0], 0)
+        code, payload, error = self.call([
+            "jev-triage", str(self.database), "SEC_EXAMPLE", "--cutoff", "2026-06-01T00:00:00Z",
+            "--excerpts", str(excerpts),
+        ])
+        self.assertEqual((code, payload, error["code"]), (2, None, "ARGUMENT_INVALID"))
 
 
 if __name__ == "__main__":

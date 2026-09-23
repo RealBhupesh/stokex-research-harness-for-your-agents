@@ -25,3 +25,13 @@ python -m stockex.cli integrity DATABASE
 ```
 
 Treat `valid=true` as internal consistency only. It does not establish source authenticity, dataset completeness, investment suitability or predictive power. If no database is supplied, preserve the manual primary-source evidence ledger and contradiction workflow above. Preserve `INSUFFICIENT DATA` when controlling evidence is unavailable; follow the linked point-in-time reference for detailed vintage and timestamp rules.
+
+## Optional Jev triage
+
+When a `TYPESAFE_API_KEY` is available, run advisory triage after the packet and before reading sources in depth:
+
+```text
+python -m stockex.cli jev-triage DATABASE SECURITY_ID --cutoff TIMESTAMP --excerpts EXCERPTS.jsonl
+```
+
+Work every `review_queue` item as described in [Jev triage](../../references/jev-triage.md). Flags are prompts to check, not findings. They never pass or fail a gate. A `SUBSTANTIVE_CONFLICT` enters the contradiction ledger, a `CLAIM_NOT_FACT` on material evidence needs primary verification, and `JEV_UNAVAILABLE` is a gap. Without a key, skip triage; the workflow above is unchanged.
