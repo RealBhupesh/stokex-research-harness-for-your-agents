@@ -69,6 +69,10 @@ records `jev_models`, `question_bank_version`, `confidence_floor` and
 reviews can compare Jev judgments with what the primary sources showed, and
 tune the floor from that record instead of assuming vendor calibration.
 
+## Short-term use
+
+For aggressive short-term picks, Jev also acts as a measured trade filter. See [Jev meta-labeling](jev-meta-labeling.md).
+
 ## Limits
 
 - Calibration and accuracy claims are the vendor's. They have not been tested

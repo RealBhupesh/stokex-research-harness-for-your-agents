@@ -1,5 +1,5 @@
-# STOCKEX v3 Institutional Equity Research OS
-Created 12 September 2026 and upgraded through 13 September 2026. This is a reusable research system, not a current stock recommendation or an empirically proven trading strategy.
+# STOCKEX v5 Indian Equity Research and Trading OS
+Created 12 September 2026 and upgraded through 23 September 2026. This is a reusable research system, not a current stock recommendation or an empirically proven trading strategy.
 
 ## Start
 Open `SKILL.md` in an assistant with web browsing and file access, or upload this complete folder/archive and instruct it to use the workflow. Read `QUICKSTART.md` for request examples. Skills supply instructions; they cannot grant market-data subscriptions or carry themselves automatically into every future conversation.
@@ -9,9 +9,9 @@ Open `SKILL.md` in an assistant with web browsing and file access, or upload thi
 
 ![STOCKEX, evidence-first Indian equity research](assets/stockex-hero.jpg)
 
-STOCKEX is an evidence-first Indian equity research operating system for conservative, compounding, tactical, event-driven and asymmetric mandates.
+STOCKEX is an evidence-first Indian equity research operating system for conservative, compounding, tactical, event-driven, asymmetric and aggressive short-term (1–10 trading day) mandates. It gives an agent the checklists a buy-side analyst and a professional short-term trader actually use, and code that computes the signals from NSE end-of-day files, measures which setups have worked, and ranks today's candidates with a full risk plan.
 
-The package includes an orchestrator, eleven specialist skills, fifteen gated analyst stages, world-to-stock intelligence, price-move attribution, a point-in-time evidence room, financial normalization, driver forecasting, variant perception, catalyst underwriting, management and relationship analysis, multi-layer risk detection, legal-credit review, portfolio opportunity cost, execution simulation, adversarial IC review, thesis monitoring, calibration, a reusable deep-research prompt and deterministic validators. All wording and code here is original. Linked third-party reports are sources, not redistributed assets or permission to redistribute market data.
+The package includes an orchestrator, twelve specialist skills, an analyst playbook, a short-term trading playbook, an Indian market calendar, KPIs for 22 sectors, NSE market-data importers, nine coded short-term setups, a walk-forward backtester, fifteen gated analyst stages, world-to-stock intelligence, price-move attribution, a point-in-time evidence room, financial normalization, driver forecasting, variant perception, catalyst underwriting, management and relationship analysis, multi-layer risk detection, legal-credit review, portfolio opportunity cost, execution simulation, adversarial IC review, thesis monitoring, calibration, a reusable deep-research prompt and deterministic validators. All wording and code here is original. Linked third-party reports are sources, not redistributed assets or permission to redistribute market data.
 
 ```mermaid
 flowchart TD
@@ -29,10 +29,14 @@ flowchart TD
 ## File map
 - `assets/stockex-hero.jpg`: repository hero and social cover image.
 - `SKILL.md`: workflow entry point.
-- `skills/`: screening, evidence room, market intelligence, swing research, fundamentals, variant perception, valuation, risk, skeptical review, investment committee and thesis monitoring.
+- `skills/`: screening, evidence room, market intelligence, swing research, momentum trading (1–10 days), fundamentals, variant perception, valuation, risk, skeptical review, investment committee and thesis monitoring.
+- `references/analyst-playbook.md`, `references/short-term-playbook.md`, `references/india-market-calendar.md`, `references/sector-kpis.md`: what expert analysts and traders check, the catalysts that move Indian stocks over days, recurring event dates and sector lead indicators.
+- `stockex/market/`: importers and point-in-time queries for NSE bhavcopy (with delivery), UDiFF CM/F&O bhavcopy, index closes, bulk/block deals, the F&O ban list and ASM/GSM lists.
+- `stockex/signals/`: indicators, F&O positioning (OI quadrant, rollover, PCR, IV), market regime, nine named setups, the hard risk plan and the scanner.
+- `stockex/backtest/`: walk-forward backtester and frozen setup scorecards.
 - `references/`: gated research rules for evidence, world drivers, attribution, normalization, forecasts, expectations, catalysts, management, relationships, risks, legal-credit, portfolio, execution and calibration.
 - `prompts/deep-stock-research.md`: portable full-research prompt that delays opinion until the evidence, charts, risk register and adversarial review are complete.
-- `templates/`: intake, evidence ledger, financial worksheet, shortlist, recommendation, risk register, market context, portfolio map, prediction record, monitoring, backtest report and decision journal.
+- `templates/`: trade ideas, intake, evidence ledger, financial worksheet, shortlist, recommendation, risk register, market context, portfolio map, prediction record, monitoring, backtest report and decision journal.
 - `scripts/finance_helpers.py`: transparent arithmetic, not a stock picker or a data collector.
 - `scripts/decision_helpers.py`: return, expectations, acceleration, leakage, portfolio risk, market risk, liquidity, calibration and performance diagnostics.
 - `scripts/market_intelligence.py`: benchmark, sector and peer-relative movement plus driver-materiality checks.
@@ -61,6 +65,34 @@ The packet command selects only records available by the supplied cutoff. The
 integrity command checks internal database consistency; a valid result does not
 prove that the supplied evidence is authentic, complete or investment-grade.
 Keep runtime databases and generated packets outside the repository.
+
+## Aggressive short-term mode (1–10 trading days)
+
+Use the `AGGRESSIVE_SHORT_TERM` mandate ([momentum trading skill](skills/india-momentum-trading/SKILL.md)) when you want stocks that could move over the next few sessions. It is served directly rather than pushed to "reframe", and every pick carries an entry trigger, stop, T1/T2, time stop and position size. Illiquid, BE/BZ-series, ASM/GSM/ESM and F&O-ban names are blocked. F&O data is used only as a signal; the harness never suggests futures or options trades.
+
+1. Download NSE end-of-day files for at least 12–18 months (full bhavcopy with delivery, the F&O UDiFF bhavcopy, the index close file, and bulk/block deals). The file list and where to find them are in [tools](references/tools.md). Downloads are manual or done by an agent's browser; nothing here scrapes NSE.
+2. Import them and check coverage:
+
+   ```bash
+   python -m stockex.cli market-import market.sqlite3 downloads/*.csv
+   python -m stockex.cli market-status market.sqlite3
+   ```
+
+3. Measure which setups have actually worked, on a period that ends before the day you want to scan:
+
+   ```bash
+   python -m stockex.cli backtest market.sqlite3 --from 2025-10-01 --to 2026-08-31 --capital 500000 --out scorecard.json
+   ```
+
+4. Scan the latest session and rank candidates:
+
+   ```bash
+   python -m stockex.cli scan market.sqlite3 --as-of 2026-09-22 --capital 500000 --risk-per-trade 0.01 --scorecard scorecard.json --format md
+   ```
+
+The scanner looks for these setups: 52-week breakouts, base breakouts after volatility contraction, pullbacks in uptrends, futures long buildup and short covering, delivery accumulation, bulk/block-deal follow-through, earnings-gap drift, and relative-strength leaders in a weak market. Their exact default rules are listed in the [short-term playbook](references/short-term-playbook.md#scanner-map). A setup ranks as `PROVEN` only when the scorecard shows at least 30 trades with positive expectancy after costs; everything else is labelled `UNPROVEN` and ranked below it. On random data the backtester measures no edge, which is the point: it only credits a setup that has earned it on your data. Add `--events events.csv` (`symbol,date,type`) to label results or other catalysts, and always verify the catalyst from the primary filing before acting.
+
+Add `--jev` to both `backtest` and `scan` to use TypeSafe AI's Jev as a meta-labeling filter. Jev judges each candidate from an anonymized state (no symbols, dates or prices). The backtest measures whether its probabilities beat each setup's base rate, and only a `PROVEN` Jev may filter or re-rank picks. See [Jev meta-labeling](references/jev-meta-labeling.md).
 
 ## Optional Jev evidence triage
 
@@ -100,6 +132,7 @@ Read these before using the harness with real money:
 - **News and perception are not proof:** Headlines, social posts, analyst commentary, famous-investor references and fund holdings may be stale, indirect, misidentified or already priced in. Verify legal entities and dated primary disclosures. A holder is not an endorsement.
 - **No invented consensus:** If analyst estimates, guidance, ownership or a catalyst cannot be verified, report the gap. Do not convert headline counts or sentiment into a probability.
 - **Sizing requires context:** Personalized rupee sizing requires capital, current holdings, approved risk limits, liquidity and loss tolerance. Without them, the harness must show formulas and scenarios only. Do not use its illustrative defaults as personal advice.
+- **Short-term setups fail often:** Even a setup with positive measured expectancy loses on many individual trades, and past expectancy can disappear when the market regime changes. The scanner's ranking is not a probability of profit.
 - **Backtests can mislead:** Supplied backtests are vulnerable to look-ahead bias, survivorship bias, selection bias, missing delisted stocks, execution slippage, costs, taxes and regime change. A passing backtest is not evidence of future alpha.
 - **Research is not order authorization:** Do not provide passwords, API keys or session tokens. The workflow does not authorize a broker connection, order placement, leverage or derivatives trade.
 - **Current law wins:** SEBI, NSE, BSE, RBI, tax, settlement, margin and corporate-action rules can change. Check the current official rule and your broker's terms before acting.

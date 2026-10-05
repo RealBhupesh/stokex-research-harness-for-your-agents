@@ -6,7 +6,7 @@ Copy the prompt, replace the bracketed fields and attach the complete repository
 Use the attached STOCKEX Indian Equity Research OS as the controlling workflow.
 
 Company, NSE/BSE symbol or ISIN: [value]
-Objective: [capital preservation / long-term compounding / tactical swing / event driven / asymmetric speculation]
+Objective: [capital preservation / long-term compounding / tactical swing / event driven / asymmetric speculation / aggressive short-term (1–10 sessions)]
 Desired outcome: [return or goal]
 Horizon: [days, months or years]
 Capital: [amount or unknown]

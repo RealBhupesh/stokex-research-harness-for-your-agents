@@ -13,4 +13,6 @@
 | Utilities | Tariffs, receivables, regulated returns, fuel supply, capex debt | Regulated economics and DCF | Ignoring cash collection and refinancing |
 | Holding companies | Listed/unlisted holdings, parent debt, tax leakage, governance | SOTP with defensible discount | Double-counting subsidiaries and debt |
 
+For lead KPIs, data releases, short-term movers and traps across about 22 Indian sectors, see [sector KPIs](sector-kpis.md).
+
 Define every KPI using issuer disclosure. Do not compare incompatible fiscal periods or accounting definitions. Sector exclusions and specialist data needs belong in intake. REITs/InvITs need a separate distribution, debt and asset-value framework rather than ordinary company P/E rankings.

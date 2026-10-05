@@ -1,5 +1,5 @@
 # Requests to reuse
-“Run the complete STOCKEX v3 workflow on [company]. Do not form an opinion until the evidence room, world-to-stock map, price-move attribution, normalized history, driver forecasts, scenarios, risk register and independent IC review are complete.”
+“Run the complete STOCKEX workflow on [company]. Do not form an opinion until the evidence room, world-to-stock map, price-move attribution, normalized history, driver forecasts, scenarios, risk register and independent IC review are complete.”
 
 “Why has [stock] risen/fallen over [exact period]? Adjust for corporate actions, compare Nifty, sector and peers, inspect volume and event timing, test competing explanations and preserve anything unexplained.”
 
@@ -10,6 +10,10 @@
 “Research [company and ticker] for 3 to 5 year ownership. Compare three relevant peers, normalize cash flows, build bear/base/bull valuations, show what the price implies, and give thesis kill conditions.”
 
 “Use `prompts/deep-stock-research.md` to investigate [company and ticker]. Do not form an opinion until you have read the annual-report notes, subsequent exchange filings, mapped competing market perceptions, produced charts from actual data, completed the risk register and performed the skeptical review.”
+
+“Use the AGGRESSIVE_SHORT_TERM mandate. My trading capital is ₹[amount], risk per trade is [0.5–2]%, maximum [N] positions, holding 1–10 sessions. Scan the latest NSE session with `python -m stockex.cli scan`, verify each catalyst from primary filings, check the next 10 sessions for events, and give me ranked picks with entry, stop, targets, time stop and size, or tell me nothing qualifies.”
+
+“Backtest the short-term setups on my imported NSE data from [date] to [date], write a scorecard, and tell me which setups are PROVEN or UNPROVEN in each market regime.”
 
 “Find a cash-equity swing setup for 2 to 8 weeks. No leverage. My total trading capital is ₹[amount], total concurrent risk budget is [amount], per-trade planned risk is [amount], and sector exposure is [limit]. Show the entry trigger, stop logic, realistic reward after costs, event risk and reasons to wait.”
 
@@ -43,6 +47,19 @@ python -m stockex.cli integrity research.sqlite3
 Use a stable security ID or ISIN and a timezone-aware cutoff. A passing
 integrity result confirms internal consistency only. It does not establish
 authenticity, completeness, suitability or predictive power.
+
+## Short-term market data
+
+Import NSE end-of-day files, backtest the setups, then scan:
+
+```bash
+python -m stockex.cli market-import market.sqlite3 downloads/*.csv
+python -m stockex.cli market-status market.sqlite3
+python -m stockex.cli backtest market.sqlite3 --from 2025-10-01 --to 2026-08-31 --out scorecard.json
+python -m stockex.cli scan market.sqlite3 --as-of 2026-09-22 --capital 500000 --scorecard scorecard.json --format md
+```
+
+Import one real file of each kind first and check `market-status`. The importers match NSE's published layouts by column name and report missing columns with a line number.
 
 ## Optional local discovery
 Copy the full `indian-stock-research` folder to your assistant's supported skill directory, commonly `~/.codex/skills/`. Keep all references and subfolders together. For another platform, use its documented skill import mechanism or load `SKILL.md` manually. This archive is portable, not automatically installed in every chat. The specialist folders can be read by the orchestrator without installing them separately.

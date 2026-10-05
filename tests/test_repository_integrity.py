@@ -13,6 +13,7 @@ def _is_runtime_output(path):
     return (
         path.suffix in {".sqlite", ".sqlite3", ".db"}
         or (path.name.startswith("evidence-packet-") and path.suffix == ".json")
+        or (path.name.startswith("scorecard") and path.suffix == ".json")
         or "stockex-output" in relative_parts
     )
 
@@ -32,7 +33,7 @@ def shipped_files():
 class ManifestTests(unittest.TestCase):
     def test_manifest_is_exact_and_versioned(self):
         manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual(manifest["version"], "4.0.0-dev1")
+        self.assertEqual(manifest["version"], "5.1.0-dev1")
         self.assertEqual(manifest["files"], sorted(set(manifest["files"])))
         self.assertEqual(set(manifest["files"]), shipped_files())
 
@@ -56,6 +57,37 @@ class ManifestTests(unittest.TestCase):
             "stockex/store/importer.py",
             "stockex/store/records.py",
             "stockex/store/schema.py",
+            "stockex/market/__init__.py",
+            "stockex/market/importers.py",
+            "stockex/market/queries.py",
+            "stockex/market/schema.py",
+            "stockex/signals/__init__.py",
+            "stockex/signals/fo.py",
+            "stockex/signals/indicators.py",
+            "stockex/signals/regime.py",
+            "stockex/signals/risk_plan.py",
+            "stockex/signals/scan.py",
+            "stockex/signals/setups.py",
+            "stockex/backtest/__init__.py",
+            "stockex/backtest/engine.py",
+            "stockex/backtest/scorecard.py",
+            "skills/india-momentum-trading/SKILL.md",
+            "references/analyst-playbook.md",
+            "references/short-term-playbook.md",
+            "references/india-market-calendar.md",
+            "references/sector-kpis.md",
+            "templates/trade-ideas.md",
+            "tests/test_market_import.py",
+            "tests/test_market_cli.py",
+            "tests/test_signals.py",
+            "tests/test_backtest.py",
+            "stockex/jev/cache.py",
+            "stockex/jev/candidates.py",
+            "stockex/jev/calibration.py",
+            "references/jev-meta-labeling.md",
+            "tests/test_jev_calibration.py",
+            "tests/test_jev_candidates.py",
+            "tests/test_jev_model.py",
             "stockex/jev/__init__.py",
             "stockex/jev/client.py",
             "stockex/jev/triage.py",
@@ -86,6 +118,7 @@ class ManifestTests(unittest.TestCase):
                 "evidence-packet-*.json",
                 "stockex-output/",
                 ".superpowers/",
+                "scorecard*.json",
             } <= ignored
         )
 
@@ -136,7 +169,7 @@ class MarkdownIntegrityTests(unittest.TestCase):
             if not text.startswith("---\n") or "\nname:" not in text or "\ndescription:" not in text:
                 failures.append(skill_file.relative_to(ROOT).as_posix())
         self.assertEqual(failures, [])
-        self.assertEqual(len(skill_files), 12)
+        self.assertEqual(len(skill_files), 13)
 
 
 if __name__ == "__main__":

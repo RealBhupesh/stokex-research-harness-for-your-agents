@@ -19,7 +19,7 @@
       "type": "object",
       "required": ["mode", "horizon", "personalized_sizing"],
       "properties": {
-        "mode": {"enum": ["CAPITAL_PRESERVATION", "LONG_TERM_COMPOUNDING", "TACTICAL_SWING", "EVENT_DRIVEN", "ASYMMETRIC_SPECULATION"]},
+        "mode": {"enum": ["CAPITAL_PRESERVATION", "LONG_TERM_COMPOUNDING", "TACTICAL_SWING", "EVENT_DRIVEN", "ASYMMETRIC_SPECULATION", "AGGRESSIVE_SHORT_TERM"]},
         "horizon": {"type": "string", "minLength": 1},
         "personalized_sizing": {"type": "boolean"}
       }
@@ -52,6 +52,19 @@
         "pre_event_exit_plan": {"type": "string", "minLength": 1},
         "post_event_exit_plan": {"type": "string", "minLength": 1},
         "liquidity_passed": {"const": true}
+      }
+    },
+    "trade_plan": {
+      "type": "object",
+      "properties": {
+        "entry": {"type": "number", "exclusiveMinimum": 0},
+        "stop": {"type": "number", "exclusiveMinimum": 0},
+        "target": {"type": "number", "exclusiveMinimum": 0},
+        "time_stop_sessions": {"type": "integer", "minimum": 1, "maximum": 20},
+        "position_size_rupees": {"type": "number", "exclusiveMinimum": 0},
+        "liquidity_passed": {"const": true},
+        "setup": {"type": "string"},
+        "scorecard_status": {"enum": ["PROVEN", "UNPROVEN", "NO_SCORECARD"]}
       }
     },
     "decision": {
