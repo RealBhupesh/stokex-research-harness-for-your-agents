@@ -56,11 +56,16 @@ def build_scorecard(result: dict, fingerprint: str, *, created_at: datetime | No
         "risk_params": result["risk_params"],
         "setup_params": result["setup_params"],
         "setups": setups,
+        "t1_base_rates": result.get("t1_base_rates", {}),
+        "jev": None if not result.get("jev") else {
+            key: value for key, value in result["jev"].items() if key != "usage"
+        },
         "portfolio": {k: v for k, v in result["portfolio"].items() if k != "equity_curve"},
         "rules": [
             "A setup is PROVEN only with at least the minimum trades and positive expectancy after costs.",
             "Use a scorecard only for scans dated after its period (out-of-sample).",
             "Changing a setup's rule bumps its version and invalidates its record here.",
+            "Jev influences scans only when its section here is PROVEN for the same question bank and model.",
         ],
     }
 

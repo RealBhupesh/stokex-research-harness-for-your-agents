@@ -20,9 +20,9 @@ Research output for the `AGGRESSIVE_SHORT_TERM` mandate ([momentum trading](../s
 
 ## Ranked picks
 
-| Rank | Symbol | Setup | Catalyst (source + date) | Key signals | Entry trigger | Stop | T1 | T2 | R:R after costs | Time stop | Qty / capital | Setup track record | Invalidation |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | | e.g. `BREAKOUT_52W` | e.g. Q2 results, NSE filing 2026-10-14 18:05 IST; or "technical only" | RVOL, delivery ratio, RS vs Nifty/sector, OI quadrant, close location | e.g. close > ₹ / buy-stop ₹ | ₹ (structure; ATR multiple) | ₹ (~1.5R) | ₹ (~3R or resistance) | x.x | N sessions or date | shares / ₹ and % of capital | trades n, hit rate %, expectancy R; or **UNPROVEN** | Specific price or event that ends the idea |
+| Rank | Symbol | Setup | Catalyst (source + date) | Key signals | Entry trigger | Stop | T1 | T2 | R:R after costs | Time stop | Qty / capital | Setup track record | Jev (p to T1, status) | Invalidation |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | | e.g. `BREAKOUT_52W` | e.g. Q2 results, NSE filing 2026-10-14 18:05 IST; or "technical only" | RVOL, delivery ratio, RS vs Nifty/sector, OI quadrant, close location | e.g. close > ₹ / buy-stop ₹ | ₹ (structure; ATR multiple) | ₹ (~1.5R) | ₹ (~3R or resistance) | x.x | N sessions or date | shares / ₹ and % of capital | trades n, hit rate %, expectancy R; or **UNPROVEN** | e.g. 62% (PROVEN) or "UNPROVEN" | Specific price or event that ends the idea |
 
 Proven setups rank above `UNPROVEN` setups. If no row qualifies, write: **No candidate meets the mandate today**, and fill the rejected section.
 

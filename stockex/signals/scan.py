@@ -4,6 +4,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 import math
 
+from ..jev.candidates import CANDIDATE_QUESTION_BANK_VERSION, JudgeBudget, candidate_state, judge_state
 from ..market.queries import (
     deals_between, futures_history, index_closes, load_histories, option_chain, restrictions_on,
 )
@@ -17,6 +18,7 @@ from .setups import SETUP_VERSIONS, SETUPS, SetupContext, evaluate_setups
 MIN_BARS = 60
 SCORE_WEIGHTS = {"strength": 0.35, "edge": 0.25, "reward_risk": 0.15, "liquidity": 0.15, "catalyst": 0.10}
 MIN_PROVEN_TRADES = 30
+JEV_WEIGHT = 0.20
 
 
 @dataclass
@@ -187,12 +189,72 @@ def _rounded(value):
     return value
 
 
+def jev_proof(scorecard: dict | None, client) -> dict:
+    """Whether a scorecard lets Jev influence this scan, and why."""
+    section = (scorecard or {}).get("jev")
+    if not section:
+        return {"status": "NO_SCORECARD", "reason": "No Jev calibration in the scorecard (run `backtest --jev`)"}
+    model = getattr(client, "model", "unknown")
+    if section.get("question_bank_version") != CANDIDATE_QUESTION_BANK_VERSION:
+        return {"status": "UNPROVEN", "reason": "Scorecard used a different Jev question bank"}
+    if section.get("model_requested") != model:
+        return {"status": "UNPROVEN", "reason": f"Scorecard measured Jev model {section.get('model_requested')}, not {model}"}
+    if section.get("status") != "PROVEN":
+        return {"status": "UNPROVEN", "reason": "; ".join(section.get("reasons", [])) or "Not proven"}
+    return {"status": "PROVEN", "reason": f"Brier skill {section['brier_skill']}, AUC {section['auc']}",
+            "base_rates": section.get("base_rates", {})}
+
+
+def apply_jev(universe: Universe, day: str, result: dict, client, *, cache=None, scorecard=None,
+              limit: int | None = None) -> dict:
+    """Judge candidates with Jev; filter and re-rank only when the scorecard proves Jev's edge."""
+    proof = jev_proof(scorecard, client)
+    budget = JudgeBudget(None)
+    candidates = result["candidates"] if limit is None else result["candidates"][:limit]
+    kept, filtered = [], []
+    for candidate in candidates:
+        f = universe.features[candidate["symbol"]]
+        state = candidate_state(candidate, f.at(f.index_of(day)), result["regime"])
+        judgment = judge_state(state, client, cache, budget)
+        judgment["proof"] = proof["status"]
+        candidate["jev"] = judgment
+        base_rate = proof.get("base_rates", {}).get(candidate["setup"])
+        if proof["status"] != "PROVEN" or judgment["status"] != "JUDGED" or base_rate is None:
+            judgment["effect"] = "NONE"
+            kept.append(candidate)
+            continue
+        p = judgment["follow_through"]
+        judgment["base_rate"] = base_rate
+        if p < base_rate:
+            judgment["effect"] = "FILTERED"
+            filtered.append({"symbol": candidate["symbol"], "setups": [candidate["setup"]], "code": "JEV_FILTERED",
+                             "message": f"Jev follow-through {p:.2f} below the setup base rate {base_rate:.2f}"})
+            continue
+        edge = _clip((p - base_rate) / 0.3 + 0.5)
+        score = candidate["score"]
+        score["components"]["jev_edge"] = round(edge, 4)
+        score["total"] = round((1 - JEV_WEIGHT) * score["total"] + JEV_WEIGHT * edge, 4)
+        judgment["effect"] = "RANKED"
+        kept.append(candidate)
+    kept += [] if limit is None else result["candidates"][limit:]
+    kept.sort(key=lambda c: (c["track_record"]["status"] == "PROVEN", c["score"]["total"]), reverse=True)
+    for rank, candidate in enumerate(kept, 1):
+        candidate["rank"] = rank
+    result["candidates"] = kept
+    result["rejected"] = result["rejected"] + filtered
+    return {"proof": proof, "usage": budget.report(), "filtered": len(filtered)}
+
+
 def scan(connection, as_of: str, *, setups=None, setup_params=None, risk_params=None, scorecard=None,
-         events=None, top: int = 10) -> dict:
+         events=None, top: int = 10, jev_client=None, jev_cache=None) -> dict:
     universe = prepare_universe(connection, as_of, events=events)
     restrictions = restrictions_on(connection, as_of, through=_shift(as_of, 4))
     result = evaluate_day(universe, as_of, setups=setups, setup_params=setup_params,
                           risk_params=risk_params, scorecard=scorecard, restrictions=restrictions)
+    jev = None
+    if jev_client is not None:
+        # Judge a few more than ``top`` so filtered names can be replaced.
+        jev = apply_jev(universe, as_of, result, jev_client, cache=jev_cache, scorecard=scorecard, limit=top * 3)
     for candidate in result["candidates"][:top]:
         if candidate["fo"] is not None:
             chain = option_chain(connection, candidate["symbol"], as_of)
@@ -206,6 +268,12 @@ def scan(connection, as_of: str, *, setups=None, setup_params=None, risk_params=
         notes.append("No scorecard supplied: setup edge is unmeasured (run `backtest` first)")
     elif max(scorecard.get("period", {}).get("to", ""), scorecard.get("period", {}).get("data_through", "")) >= as_of:
         notes.append("Scorecard period overlaps the scan date; its track record is in-sample")
+    if jev is not None:
+        if jev["proof"]["status"] == "PROVEN":
+            notes.append(f"Jev is PROVEN ({jev['proof']['reason']}): it filtered {jev['filtered']} candidate(s) "
+                         "and contributes 20% of the score")
+        else:
+            notes.append(f"Jev shown for information only ({jev['proof']['status']}): {jev['proof']['reason']}")
     return {
         "as_of": as_of,
         "universe": {"symbols_with_data": len(universe.features), "traded_on_date": len(traded)},
@@ -216,6 +284,7 @@ def scan(connection, as_of: str, *, setups=None, setup_params=None, risk_params=
         "candidates": result["candidates"][:top],
         "candidates_total": len(result["candidates"]),
         "rejected": result["rejected"],
+        "jev": jev,
         "notes": notes,
         "advisory": "Research output, not investment advice. Setups can fail; gaps can exceed planned stops.",
     }
@@ -239,6 +308,15 @@ def _short(value) -> str:
     return str(value)
 
 
+def _jev_cell(jev: dict | None) -> str:
+    if not jev:
+        return "-"
+    if jev["status"] != "JUDGED":
+        return "unavailable"
+    crowded = ", crowded" if jev["crowding_risk"] >= 0.6 else ""
+    return f"{jev['follow_through']:.0%} to T1, catalyst {jev['catalyst_quality']}{crowded} ({jev['proof']})"
+
+
 def to_markdown(report: dict) -> str:
     regime = report["regime"]
     lines = [
@@ -255,8 +333,8 @@ def to_markdown(report: dict) -> str:
         lines.append(f"- Note: {note}")
     lines += [
         "",
-        "| # | Symbol | Setup | Catalyst | Key signals | Entry above | Stop | T1 | T2 | R:R net | Time stop | Qty (value) | Track record |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| # | Symbol | Setup | Catalyst | Key signals | Entry above | Stop | T1 | T2 | R:R net | Time stop | Qty (value) | Track record | Jev |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for c in report["candidates"]:
         plan, track = c["plan"], c["track_record"]
@@ -273,10 +351,10 @@ def to_markdown(report: dict) -> str:
         lines.append(
             f"| {c['rank']} | {c['symbol']} | {c['setup']} | {catalyst} | {signals} | {plan['entry']:.2f} | "
             f"{plan['stop']:.2f} | {plan['t1']:.2f} | {plan['t2']:.2f} | {plan['reward_risk_after_costs']:.2f} | "
-            f"{plan['time_stop_sessions']} sessions | {qty} | {record} |"
+            f"{plan['time_stop_sessions']} sessions | {qty} | {record} | {_jev_cell(c.get('jev'))} |"
         )
     if not report["candidates"]:
-        lines.append("| - | No candidate passed the setups and hard risk rules | | | | | | | | | | | |")
+        lines.append("| - | No candidate passed the setups and hard risk rules | | | | | | | | | | | | |")
     if report["rejected"]:
         lines += ["", "## Blocked or rejected", ""]
         for item in report["rejected"][:25]:

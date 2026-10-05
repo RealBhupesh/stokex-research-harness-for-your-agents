@@ -92,6 +92,8 @@ Use the `AGGRESSIVE_SHORT_TERM` mandate ([momentum trading skill](skills/india-m
 
 The scanner looks for these setups: 52-week breakouts, base breakouts after volatility contraction, pullbacks in uptrends, futures long buildup and short covering, delivery accumulation, bulk/block-deal follow-through, earnings-gap drift, and relative-strength leaders in a weak market. Their exact default rules are listed in the [short-term playbook](references/short-term-playbook.md#scanner-map). A setup ranks as `PROVEN` only when the scorecard shows at least 30 trades with positive expectancy after costs; everything else is labelled `UNPROVEN` and ranked below it. On random data the backtester measures no edge, which is the point: it only credits a setup that has earned it on your data. Add `--events events.csv` (`symbol,date,type`) to label results or other catalysts, and always verify the catalyst from the primary filing before acting.
 
+Add `--jev` to both `backtest` and `scan` to use TypeSafe AI's Jev as a meta-labeling filter. Jev judges each candidate from an anonymized state (no symbols, dates or prices). The backtest measures whether its probabilities beat each setup's base rate, and only a `PROVEN` Jev may filter or re-rank picks. See [Jev meta-labeling](references/jev-meta-labeling.md).
+
 ## Optional Jev evidence triage
 
 `python -m stockex.cli jev-triage` sends each cutoff-valid packet source (and an

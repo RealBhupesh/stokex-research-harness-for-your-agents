@@ -3,12 +3,15 @@ import io
 import json
 import pathlib
 import sys
+import os
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import market_fixtures as fx
+from stockex import cli
 from stockex.cli import main
 
 
@@ -99,6 +102,40 @@ class MarketCliTests(unittest.TestCase):
         events.write_text("symbol,date,type\nSYM01,2026-04-01,results\n", encoding="utf-8")
         code, _, error = self.call(["scan", str(self.database), "--as-of", self.last_date(), "--events", str(events)])
         self.assertEqual((code, error), (0, None))
+
+    def test_jev_flags_use_the_client_factory_and_cache(self):
+        class Stub:
+            model = "jev-stub"
+            calls = 0
+
+            def evaluate(self, state, questions):
+                Stub.calls += 1
+                return {"model": "jev-1.13.0", "answers": {
+                    "follow_through": {"type": "noul", "noul": 0.6},
+                    "catalyst_quality": {"type": "score", "score": "weak", "confidence": 0.6},
+                    "crowding_risk": {"type": "noul", "noul": 0.7},
+                    "failure_mode": {"type": "choice", "choice": "weak_volume", "confidence": 0.5},
+                }}
+
+        models = []
+        with mock.patch.object(cli, "jev_client_factory", lambda model: models.append(model) or Stub()):
+            code, summary, error = self.call([
+                "backtest", str(self.database), "--from", "2026-03-02", "--to", "2026-04-15",
+                "--jev", "--jev-model", "jev-stub", "--jev-max-calls", "40",
+            ])
+            self.assertEqual((code, error), (0, None))
+            self.assertEqual(summary["jev"]["model_requested"], "jev-stub")
+            self.assertLessEqual(summary["jev"]["usage"]["calls"], 40)
+            code, text, error = self.call(["scan", str(self.database), "--as-of", self.last_date(),
+                                           "--jev", "--jev-model", "jev-stub", "--format", "md"])
+        self.assertEqual((code, error), (0, None))
+        self.assertIn("| Jev |", text)
+        self.assertEqual(models, ["jev-stub", "jev-stub"])
+
+    def test_jev_without_api_key_is_structured_error(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            code, payload, error = self.call(["scan", str(self.database), "--as-of", self.last_date(), "--jev"])
+        self.assertEqual((code, payload, error["code"]), (2, None, "JEV_CONFIG_MISSING"))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,11 @@
 # Decision-value filter
 
+## Version 5.1 Jev meta-labeling
+
+- Added Jev as a meta-labeler on short-term candidates because a calibrated second opinion on each setup instance can raise expectancy without replacing transparent rules.
+- Jev sees an anonymized state (no symbols, dates, names or absolute prices) so backtests cannot reward memory of history.
+- Jev influences ranking only when a backtest scorecard shows positive Brier skill against setup base rates, AUC above 0.55, at least 50 judged trades and higher filtered expectancy. Otherwise it is information only.
+
 ## Version 5.0 short-term setups and market-data signals
 
 - Added short-term and technical setups (`BREAKOUT_52W`, `BASE_BREAKOUT_VCP`, `PULLBACK_UPTREND`, `DELIVERY_ACCUMULATION`, `DEAL_FOLLOW_THROUGH`, `EARNINGS_GAP_DRIFT`, `RS_LEADER_IN_WEAK_TAPE`) and F&O-derived signals (`LONG_BUILDUP`, `SHORT_COVERING`, rollover, ban status). The v2 filter excluded unvalidated technical indicators. That condition is now met: the walk-forward backtester (`python -m stockex.cli backtest`) supplies out-of-sample evidence for each frozen setup definition.

@@ -10,6 +10,8 @@ the open, and when a bar touches both the stop and a target, the stop wins.
 from collections import defaultdict
 from datetime import date, timedelta
 
+from ..jev.calibration import evaluate_jev
+from ..jev.candidates import CANDIDATE_QUESTION_BANK_VERSION, JudgeBudget, candidate_state, judge_state
 from ..market.queries import index_closes, restrictions_on, trading_dates
 from ..signals.regime import BENCHMARK_INDEX
 from ..signals.risk_plan import DEFAULT_RISK_PARAMS
@@ -115,14 +117,20 @@ def _shift(day: str, days: int) -> str:
 
 
 def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=None, risk_params=None,
-                 events=None, capital: float = 1_000_000, max_positions: int = 5, progress=None) -> dict:
+                 events=None, capital: float = 1_000_000, max_positions: int = 5, progress=None,
+                 jev_client=None, jev_cache=None, jev_max_calls: int | None = 2000) -> dict:
     """Walk forward over [start, end]. Returns per-setup stats, trades and a portfolio equity curve.
 
     Setup statistics come from every signal simulated independently (the
     signal study), so capacity limits do not hide how a setup behaves. The
     portfolio simulation then takes the highest-ranked signals up to
     ``max_positions`` to show a realistic equity curve.
+
+    With ``jev_client``, every filled trade is also judged by Jev from an
+    anonymized signal-day state, and the result carries a calibration report
+    that decides whether Jev may influence future scans.
     """
+    budget = JudgeBudget(jev_max_calls)
     risk = {**DEFAULT_RISK_PARAMS, **(risk_params or {}), "capital": capital}
     cost_bps = risk["round_trip_cost_bps"]
     # Signals only use bars up to each day (features are causal), but open
@@ -143,7 +151,13 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
             if trade and trade["filled"]:
                 trade.update(symbol=candidate["symbol"], setup=candidate["setup"],
                              regime=result["regime"]["label"], score=candidate["score"]["total"],
-                             shares=candidate["plan"]["shares"])
+                             shares=candidate["plan"]["shares"],
+                             t1_hit=any(leg["reason"] in {"T1", "T2"} for leg in trade["legs"]))
+                if jev_client is not None:
+                    state = candidate_state(candidate, f.at(f.index_of(day)), result["regime"])
+                    judgment = judge_state(state, jev_client, jev_cache, budget)
+                    trade["jev"] = judgment
+                    trade["jev_p"] = judgment.get("follow_through")
                 signal_trades.append(trade)
         if progress:
             progress(n + 1, len(days))
@@ -162,6 +176,19 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
                            index_closes(connection, BENCHMARK_INDEX, end))
     for trade in signal_trades:
         trade["exit_after_period"] = trade["exit_date"] > end
+    t1_base_rates = {
+        name: round(sum(t["t1_hit"] for t in trades) / len(trades), 4) for name, trades in sorted(by_setup.items())
+    }
+    jev = None
+    if jev_client is not None:
+        jev = {
+            **evaluate_jev(signal_trades),
+            "question_bank_version": CANDIDATE_QUESTION_BANK_VERSION,
+            "model_requested": getattr(jev_client, "model", "unknown"),
+            "models_returned": sorted({t["jev"]["model"] for t in signal_trades
+                                       if t.get("jev", {}).get("status") == "JUDGED"}),
+            "usage": budget.report(),
+        }
     return {
         "period": {"from": start, "to": end, "trading_days": len(days), "data_through": data_through},
         "capital": capital,
@@ -170,6 +197,8 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
         "setup_params": setup_params or {},
         "overall": _stats(signal_trades),
         "setups": setups_report,
+        "t1_base_rates": t1_base_rates,
+        "jev": jev,
         "portfolio": portfolio,
         "trades": signal_trades,
         "notes": [

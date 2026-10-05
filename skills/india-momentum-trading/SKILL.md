@@ -47,6 +47,8 @@ python -m stockex.cli backtest DATABASE --from D1 --to D2 --out scorecard.json
 
 The backtest window must end before the scan's `--as-of` date.
 
+To use Jev as a trade filter, add `--jev` to both the backtest and the scan (needs `TYPESAFE_API_KEY`). The backtest measures whether Jev's follow-through probabilities beat each setup's base rate ([Jev meta-labeling](../../references/jev-meta-labeling.md)). Jev filters and re-ranks picks only when the scorecard marks it `PROVEN`; otherwise its column is information only.
+
 Without a database, do the manual equivalent from dated NSE bhavcopy, delivery, F&O, deal and index files. Apply the same setup definitions (`BREAKOUT_52W`, `BASE_BREAKOUT_VCP`, `PULLBACK_UPTREND`, `LONG_BUILDUP`, `SHORT_COVERING`, `DELIVERY_ACCUMULATION`, `DEAL_FOLLOW_THROUGH`, `EARNINGS_GAP_DRIFT`, `RS_LEADER_IN_WEAK_TAPE`) and state which files and dates you used. Never invent a quote, OI figure or delivery %.
 
 ### 4. Verify the catalyst and the calendar
@@ -93,6 +95,7 @@ Fill [trade ideas](../../templates/trade-ideas.md).
 
 - **Ranking:** measured setup edge first, then catalyst strength and freshness, then confirmation quality, then liquidity. Ranking is not decided by the size of the expected return.
 - **UNPROVEN setups:** a setup that the scorecard marks `UNPROVEN` (fewer than 30 trades or non-positive expectancy), or one with no scorecard, must be labelled `UNPROVEN` in the track-record column and ranked below every proven setup.
+- **Jev:** report Jev's probability to T1, catalyst quality and crowding flag with the status (`PROVEN`, `UNPROVEN` or `NO_SCORECARD`). Never present an unproven Jev probability as a reason to take a trade.
 - **No picks:** if nothing qualifies, say so plainly: "No candidate meets the mandate today." Then list the closest rejects and what would change them.
 - **Journal:** log every pick for post-trade review, so the scorecard and the [validation](../../references/validation-and-calibration.md) loop can learn from it.
 

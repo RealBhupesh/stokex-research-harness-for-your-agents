@@ -33,7 +33,7 @@ def shipped_files():
 class ManifestTests(unittest.TestCase):
     def test_manifest_is_exact_and_versioned(self):
         manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual(manifest["version"], "5.0.0-dev1")
+        self.assertEqual(manifest["version"], "5.1.0-dev1")
         self.assertEqual(manifest["files"], sorted(set(manifest["files"])))
         self.assertEqual(set(manifest["files"]), shipped_files())
 
@@ -81,6 +81,13 @@ class ManifestTests(unittest.TestCase):
             "tests/test_market_cli.py",
             "tests/test_signals.py",
             "tests/test_backtest.py",
+            "stockex/jev/cache.py",
+            "stockex/jev/candidates.py",
+            "stockex/jev/calibration.py",
+            "references/jev-meta-labeling.md",
+            "tests/test_jev_calibration.py",
+            "tests/test_jev_candidates.py",
+            "tests/test_jev_model.py",
             "stockex/jev/__init__.py",
             "stockex/jev/client.py",
             "stockex/jev/triage.py",
