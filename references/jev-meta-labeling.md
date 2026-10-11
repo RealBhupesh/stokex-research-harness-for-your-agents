@@ -56,6 +56,10 @@ Proven setups still rank above unproven ones. Jev never overrides the hard risk 
 
 Judgments are cached in the market database (table `jev_judgments`), keyed by input hash, bank version and model, so re-running a backtest makes no new calls. `--jev-max-calls` (default 2000) caps new calls per backtest. Trades beyond the cap stay unjudged and are counted. A failed call is recorded as `JEV_UNAVAILABLE`, which is a gap, not a negative judgment. Calls need `TYPESAFE_API_KEY`.
 
+## The baseline Jev must beat
+
+The backtest also trains a transparent walk-forward logistic model on the same anonymized features ([accuracy controls](accuracy-controls.md#6-walk-forward-model)). When both are PROVEN, the one with the higher Brier skill decides. Prefer the cheaper model when the two are close.
+
 ## Limits
 
 - Calibration and accuracy claims are the vendor's until your own scorecard shows them.

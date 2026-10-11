@@ -147,9 +147,9 @@ class MarketImportTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, "COLUMNS_MISSING")
 
     def test_point_in_time_reads_exclude_later_rows(self):
-        for day, close in ((D1, 104), (D2, 110)):
+        for day, close, prev in ((D1, 104, 100), (D2, 110, 104)):
             file = self.path(f"sec_bhavdata_full_{day:%d%m%Y}.csv")
-            fx.write_cm_full(file, [fx.cm_full_line("ABC", day, 100, 111, 99, close, 100, 1000, deliv_pct=50)])
+            fx.write_cm_full(file, [fx.cm_full_line("ABC", day, 100, 111, 99, close, prev, 1000, deliv_pct=50)])
             import_market_file(self.db, file)
         self.assertEqual(load_history(self.db, "ABC", "2026-09-21").close, [104.0])
         self.assertEqual(load_history(self.db, "ABC", "2026-09-22").close, [104.0, 110.0])

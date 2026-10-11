@@ -15,7 +15,9 @@ from ..jev.candidates import CANDIDATE_QUESTION_BANK_VERSION, JudgeBudget, candi
 from ..market.queries import index_closes, restrictions_on, trading_dates
 from ..signals.regime import BENCHMARK_INDEX
 from ..signals.risk_plan import DEFAULT_RISK_PARAMS
+from ..signals.meta_model import MODEL_FEATURE_VERSION, LogisticModel, WalkForwardModel, feature_vector
 from ..signals.scan import evaluate_day, prepare_universe
+from ..signals.setups import SETUPS
 
 
 def simulate_trade(series, signal_index: int, plan: dict, *, cost_bps: float) -> dict | None:
@@ -25,6 +27,9 @@ def simulate_trade(series, signal_index: int, plan: dict, *, cost_bps: float) ->
         return None
     entry, stop, t1, t2 = plan["entry"], plan["stop"], plan["t1"], plan["t2"]
     day_open, day_high = series.open[fill_index], series.high[fill_index]
+    if day_high == series.low[fill_index] and day_open >= entry:
+        # Locked at the upper circuit all day: buyers queue but rarely fill.
+        return {"filled": False, "signal_date": series.dates[signal_index], "reason": "CIRCUIT_LOCKED"}
     if day_open >= entry:
         fill = day_open
     elif day_high >= entry:
@@ -48,6 +53,8 @@ def simulate_trade(series, signal_index: int, plan: dict, *, cost_bps: float) ->
     for k in range(fill_index, len(series)):
         o, h, l, c = series.open[k], series.high[k], series.low[k], series.close[k]
         held = k - fill_index + 1
+        if k > fill_index and h == l and l <= current_stop:
+            continue  # locked at the lower circuit: no sellers fill today; exit at the next open
         if k > fill_index and o <= current_stop:
             close_leg(remaining, o, "GAP_STOP", k)
         elif l <= current_stop:
@@ -70,7 +77,10 @@ def simulate_trade(series, signal_index: int, plan: dict, *, cost_bps: float) ->
     if exit_reason is None:
         close_leg(remaining, series.close[-1], "END_OF_DATA", len(series) - 1)
         exit_reason, exit_index = "END_OF_DATA", len(series) - 1
-    cost = fill * cost_bps / 10_000
+    if plan.get("round_trip_cost_per_share") and plan.get("entry"):
+        cost = fill * plan["round_trip_cost_per_share"] / plan["entry"]
+    else:
+        cost = fill * cost_bps / 10_000
     net = realised - cost
     return {
         "filled": True,
@@ -90,7 +100,8 @@ def simulate_trade(series, signal_index: int, plan: dict, *, cost_bps: float) ->
 def _stats(trades: list[dict]) -> dict:
     if not trades:
         return {"trades": 0, "hit_rate": None, "expectancy_r": None, "avg_return_pct": None,
-                "profit_factor": None, "avg_sessions_held": None, "worst_r": None, "max_losing_streak": 0}
+                "profit_factor": None, "avg_sessions_held": None, "worst_r": None, "max_losing_streak": 0,
+                "gap_stop_rate": None, "avg_loss_beyond_stop_r": None}
     rs = [t["r_multiple"] for t in trades]
     gains, losses = sum(r for r in rs if r > 0), -sum(r for r in rs if r < 0)
     streak = worst_streak = 0
@@ -106,6 +117,9 @@ def _stats(trades: list[dict]) -> dict:
         "avg_sessions_held": round(sum(t["sessions_held"] for t in trades) / len(trades), 2),
         "worst_r": round(min(rs), 3),
         "max_losing_streak": worst_streak,
+        "gap_stop_rate": round(sum(t["exit_reason"] == "GAP_STOP" for t in trades) / len(trades), 4),
+        "avg_loss_beyond_stop_r": round(
+            sum(-1 - r for r in rs if r < -1.05) / max(1, sum(1 for r in rs if r < -1.05)), 4),
     }
 
 
@@ -131,6 +145,8 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
     that decides whether Jev may influence future scans.
     """
     budget = JudgeBudget(jev_max_calls)
+    setup_names = list(SETUPS)
+    model = WalkForwardModel(setup_names)
     risk = {**DEFAULT_RISK_PARAMS, **(risk_params or {}), "capital": capital}
     cost_bps = risk["round_trip_cost_bps"]
     # Signals only use bars up to each day (features are causal), but open
@@ -141,6 +157,7 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
     days = trading_dates(connection, start, end)
     signal_trades, daily_candidates = [], {}
     for n, day in enumerate(days):
+        model.maybe_refit(day, signal_trades)
         restrictions = restrictions_on(connection, day, through=_shift(day, 4))
         result = evaluate_day(universe, day, setups=setups, setup_params=setup_params,
                               risk_params=risk, restrictions=restrictions)
@@ -153,8 +170,10 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
                              regime=result["regime"]["label"], score=candidate["score"]["total"],
                              shares=candidate["plan"]["shares"],
                              t1_hit=any(leg["reason"] in {"T1", "T2"} for leg in trade["legs"]))
+                state = candidate_state(candidate, f.at(f.index_of(day)), result["regime"])
+                trade["model_features"] = feature_vector(state, setup_names)
+                trade["model_p"] = model.predict(trade["model_features"])
                 if jev_client is not None:
-                    state = candidate_state(candidate, f.at(f.index_of(day)), result["regime"])
                     judgment = judge_state(state, jev_client, jev_cache, budget)
                     trade["jev"] = judgment
                     trade["jev_p"] = judgment.get("follow_through")
@@ -173,12 +192,24 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
         for name, trades in sorted(by_setup.items())
     }
     portfolio = _portfolio(universe, days, daily_candidates, signal_trades, capital, max_positions,
-                           index_closes(connection, BENCHMARK_INDEX, end))
+                           index_closes(connection, BENCHMARK_INDEX, end), risk["max_per_sector"])
     for trade in signal_trades:
         trade["exit_after_period"] = trade["exit_date"] > end
     t1_base_rates = {
         name: round(sum(t["t1_hit"] for t in trades) / len(trades), 4) for name, trades in sorted(by_setup.items())
     }
+    model_report = {
+        **evaluate_jev(signal_trades, key="model_p"),
+        "feature_version": MODEL_FEATURE_VERSION,
+        "walk_forward_fits": model.fits,
+        "coefficients": None,
+    }
+    if len(signal_trades) >= model.min_train and len({t["t1_hit"] for t in signal_trades}) == 2:
+        final = LogisticModel.fit([t["model_features"] for t in signal_trades],
+                                  [int(t["t1_hit"]) for t in signal_trades])
+        model_report["coefficients"] = final.to_dict()
+    for trade in signal_trades:
+        trade.pop("model_features", None)
     jev = None
     if jev_client is not None:
         jev = {
@@ -199,6 +230,7 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
         "setups": setups_report,
         "t1_base_rates": t1_base_rates,
         "jev": jev,
+        "model": model_report,
         "portfolio": portfolio,
         "trades": signal_trades,
         "notes": [
@@ -209,7 +241,8 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
     }
 
 
-def _portfolio(universe, days, daily_candidates, signal_trades, capital, max_positions, benchmark) -> dict:
+def _portfolio(universe, days, daily_candidates, signal_trades, capital, max_positions, benchmark,
+               max_per_sector: int = 0) -> dict:
     trades_by_key = {(t["symbol"], t["signal_date"]): t for t in signal_trades}
     open_positions: list[dict] = []
     taken, cash, equity_curve = [], capital, []
@@ -231,11 +264,15 @@ def _portfolio(universe, days, daily_candidates, signal_trades, capital, max_pos
             shares = candidate["plan"]["shares"]
             if not trade or candidate["symbol"] in busy or not shares:
                 continue
+            sector = candidate.get("sector")
+            if max_per_sector and sector is not None and sum(
+                    1 for p in open_positions if p.get("sector") == sector) >= max_per_sector:
+                continue
             cost = shares * trade["fill"]
             if cost > cash:
                 continue
             cash -= cost
-            position = dict(trade, shares=shares)
+            position = dict(trade, shares=shares, sector=sector)
             open_positions.append(position)
             taken.append(position)
             busy.add(candidate["symbol"])

@@ -64,6 +64,21 @@ class SimulateTradeTests(unittest.TestCase):
         self.assertEqual([leg["reason"] for leg in trade["legs"]], ["T1", "TRAIL_STOP"])
         self.assertGreater(trade["r_multiple"], 0)
 
+    def test_locked_upper_circuit_cannot_be_bought(self):
+        trade = simulate_trade(series_after((105, 105, 105, 105)), 0, PLAN, cost_bps=0)
+        self.assertEqual((trade["filled"], trade["reason"]), (False, "CIRCUIT_LOCKED"))
+
+    def test_locked_lower_circuit_delays_the_stop_exit(self):
+        trade = simulate_trade(series_after((99.5, 101, 99, 100.5), (90, 90, 90, 90), (88, 89, 86, 87)), 0,
+                               PLAN, cost_bps=0)
+        self.assertEqual((trade["exit_reason"], trade["legs"][-1]["price"]), ("GAP_STOP", 88))
+        self.assertAlmostEqual(trade["r_multiple"], -2.4)
+
+    def test_plan_cost_overrides_flat_cost(self):
+        plan = dict(PLAN, round_trip_cost_per_share=1.0, time_stop_sessions=1)
+        trade = simulate_trade(series_after((99.5, 101, 99, 100.5)), 0, plan, cost_bps=0)
+        self.assertAlmostEqual(trade["r_multiple"], (0.5 - 1.0) / 5)
+
     def test_gap_above_target_on_entry_day_never_books_below_fill(self):
         trade = simulate_trade(series_after((120, 121, 119, 120)), 0, PLAN, cost_bps=0)
         self.assertEqual(trade["fill"], 120)
@@ -98,9 +113,11 @@ class WalkForwardTests(unittest.TestCase):
         card = build_scorecard(first, data_fingerprint(self.db, start, end))
         self.assertEqual(len(card["setups"]), 9)
         for entry in card["setups"].values():
-            expected = "PROVEN" if entry["overall"]["trades"] >= 30 and (entry["overall"].get("expectancy_r") or 0) > 0 \
-                else "UNPROVEN"
-            self.assertEqual(entry["status"], expected)
+            overall = entry["overall"]
+            self.assertEqual(entry["status"], "UNPROVEN" if overall["reasons"] else "PROVEN")
+            if entry["status"] == "PROVEN":
+                self.assertGreater(overall["expectancy_lower_bound"], 0)
+                self.assertGreaterEqual(overall["trades"], 30)
 
     def test_scan_does_not_see_future_bars(self):
         day = self.dates[240]

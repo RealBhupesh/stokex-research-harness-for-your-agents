@@ -8,6 +8,7 @@ end-of-day publication time of ``as_of``.
 from dataclasses import dataclass, field
 import sqlite3
 
+from .corporate import adjustment_events, apply_adjustments
 from .importers import DEFAULT_AVAILABLE_TIME_UTC
 
 
@@ -32,6 +33,7 @@ class PriceSeries:
     delivery_qty: list = field(default_factory=list)
     delivery_pct: list = field(default_factory=list)
     series: list = field(default_factory=list)
+    adjustments: list = field(default_factory=list)
 
     def __len__(self) -> int:
         return len(self.dates)
@@ -69,8 +71,13 @@ def load_histories(
     *,
     start: str | None = None,
     symbols: list[str] | None = None,
+    adjust: bool = True,
 ) -> dict[str, PriceSeries]:
-    """Load every symbol's bars up to ``as_of``, one bar per date."""
+    """Load every symbol's bars up to ``as_of``, one bar per date.
+
+    With ``adjust`` (the default) prices before each split, bonus or
+    consolidation ex-date on or before ``as_of`` are back-adjusted.
+    """
     clauses = ["trade_date <= ?", "available_at <= ?"]
     params: list = [as_of, cutoff(as_of)]
     if start is not None:
@@ -94,11 +101,23 @@ def load_histories(
                 series.append(row)
             continue
         series.append(row)
+    if adjust:
+        explicit: dict[str, list] = {}
+        for row in connection.execute(
+            "SELECT symbol, ex_date, kind, factor FROM corporate_actions WHERE ex_date <= ? ORDER BY ex_date",
+            (as_of,),
+        ):
+            explicit.setdefault(row["symbol"], []).append(
+                {"ex_date": row["ex_date"], "kind": row["kind"], "factor": row["factor"]}
+            )
+        for symbol, series in histories.items():
+            apply_adjustments(series, adjustment_events(series, explicit.get(symbol, [])))
     return histories
 
 
-def load_history(connection, symbol: str, as_of: str, *, start: str | None = None) -> PriceSeries:
-    return load_histories(connection, as_of, start=start, symbols=[symbol]).get(
+def load_history(connection, symbol: str, as_of: str, *, start: str | None = None,
+                 adjust: bool = True) -> PriceSeries:
+    return load_histories(connection, as_of, start=start, symbols=[symbol], adjust=adjust).get(
         symbol.upper(), PriceSeries(symbol.upper())
     )
 
@@ -203,6 +222,26 @@ def restrictions_on(connection, trade_date: str, *, through: str | None = None) 
     return result
 
 
+def sector_map(connection) -> dict[str, str]:
+    """Symbol to industry from the most recent constituent list that names it."""
+    rows = connection.execute(
+        "SELECT symbol, industry FROM index_members WHERE industry IS NOT NULL ORDER BY as_of_date"
+    ).fetchall()
+    return {row["symbol"]: row["industry"] for row in rows}
+
+
+def announcements_between(connection, start: str, end: str) -> dict[str, list[dict]]:
+    """Announcements broadcast between ``start`` and the end-of-day cutoff of ``end``, by symbol."""
+    rows = connection.execute(
+        "SELECT * FROM announcements WHERE broadcast_at >= ? AND broadcast_at <= ? ORDER BY broadcast_at",
+        (f"{start}T00:00:00Z", cutoff(end)),
+    ).fetchall()
+    result: dict[str, list[dict]] = {}
+    for row in rows:
+        result.setdefault(row["symbol"], []).append(dict(row))
+    return result
+
+
 def coverage(connection) -> dict:
     def span(table: str, column: str) -> dict:
         row = connection.execute(
@@ -229,6 +268,11 @@ def coverage(connection) -> dict:
         "fo_bars": span("fo_bars", "trade_date"),
         "deals": span("deals", "deal_date"),
         "restrictions": connection.execute("SELECT COUNT(*) FROM restrictions").fetchone()[0],
+        "corporate_actions": connection.execute("SELECT COUNT(*) FROM corporate_actions").fetchone()[0],
+        "sector_mapped_symbols": connection.execute(
+            "SELECT COUNT(DISTINCT symbol) FROM index_members WHERE industry IS NOT NULL").fetchone()[0],
+        "announcements": connection.execute("SELECT COUNT(*) FROM announcements").fetchone()[0],
+        "journal_entries": connection.execute("SELECT COUNT(*) FROM journal").fetchone()[0],
         "gaps": {
             "dates_without_delivery": missing_delivery_dates,
             "bar_dates_without_index": sorted(bar_dates - index_dates),

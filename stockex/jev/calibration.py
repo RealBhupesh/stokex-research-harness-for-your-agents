@@ -46,14 +46,18 @@ def _expectancy(trades: list[dict]) -> float | None:
     return round(sum(t["r_multiple"] for t in trades) / len(trades), 4) if trades else None
 
 
-def _rounded_auc(trades: list[dict]) -> float | None:
-    value = auc([t["jev_p"] for t in trades], [1 if t["t1_hit"] else 0 for t in trades])
+def _rounded_auc(trades: list[dict], key: str = "jev_p") -> float | None:
+    value = auc([t[key] for t in trades], [1 if t["t1_hit"] else 0 for t in trades])
     return None if value is None else round(value, 4)
 
 
-def evaluate_jev(trades: list[dict]) -> dict:
-    """Calibration report over judged trades, with per-setup base rates."""
-    judged = [t for t in trades if t.get("jev_p") is not None]
+def evaluate_jev(trades: list[dict], key: str = "jev_p") -> dict:
+    """Calibration report over judged trades, with per-setup base rates.
+
+    ``key`` names the probability field, so the same proof applies to Jev
+    (``jev_p``) and the walk-forward model (``model_p``).
+    """
+    judged = [t for t in trades if t.get(key) is not None]
     by_setup: dict = {}
     for trade in judged:
         by_setup.setdefault(trade["setup"], []).append(trade)
@@ -67,13 +71,13 @@ def evaluate_jev(trades: list[dict]) -> dict:
     }
     if not judged:
         return {**report, "status": "UNPROVEN", "reasons": ["No judged trades"]}
-    ps = [t["jev_p"] for t in judged]
+    ps = [t[key] for t in judged]
     ys = [1 if t["t1_hit"] else 0 for t in judged]
     base = [base_rates[t["setup"]] for t in judged]
     jev_brier, base_brier = brier(ps, ys), brier(base, ys)
     skill = None if base_brier == 0 else 1 - jev_brier / base_brier
     ranking = auc(ps, ys)
-    kept = [t for t in judged if t["jev_p"] >= base_rates[t["setup"]]]
+    kept = [t for t in judged if t[key] >= base_rates[t["setup"]]]
     filtered, unfiltered = _expectancy(kept), _expectancy(judged)
     reasons = []
     if len(judged) < MIN_JUDGED_TRADES:
@@ -83,7 +87,7 @@ def evaluate_jev(trades: list[dict]) -> dict:
     if ranking is None or ranking <= MIN_AUC:
         reasons.append(f"AUC not above {MIN_AUC}")
     if filtered is None or unfiltered is None or filtered <= unfiltered:
-        reasons.append("Filtering on Jev does not raise expectancy")
+        reasons.append("Filtering on these probabilities does not raise expectancy")
     return {
         **report,
         "status": "UNPROVEN" if reasons else "PROVEN",
@@ -99,7 +103,7 @@ def evaluate_jev(trades: list[dict]) -> dict:
             setup: {
                 "judged_trades": len(items),
                 "base_rate": base_rates[setup],
-                "auc": _rounded_auc(items),
+                "auc": _rounded_auc(items, key),
             }
             for setup, items in sorted(by_setup.items())
         },

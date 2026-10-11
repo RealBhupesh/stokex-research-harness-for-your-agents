@@ -7,7 +7,7 @@ evolve without migrating the other. Both may live in the same database file.
 import sqlite3
 
 
-MARKET_SCHEMA_VERSION = 1
+MARKET_SCHEMA_VERSION = 2
 
 _TABLES = (
     """
@@ -95,6 +95,52 @@ _TABLES = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS corporate_actions (
+        symbol TEXT NOT NULL,
+        ex_date TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('SPLIT', 'BONUS', 'CONSOLIDATION')),
+        factor REAL NOT NULL CHECK (factor > 0),
+        purpose TEXT,
+        PRIMARY KEY (symbol, ex_date, kind)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS index_members (
+        index_name TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        industry TEXT,
+        isin TEXT,
+        as_of_date TEXT NOT NULL,
+        PRIMARY KEY (index_name, symbol, as_of_date)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS announcements (
+        symbol TEXT NOT NULL,
+        broadcast_at TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        details TEXT,
+        category TEXT,
+        category_source TEXT,
+        PRIMARY KEY (symbol, broadcast_at, subject)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS journal (
+        scan_date TEXT NOT NULL,
+        symbol TEXT NOT NULL,
+        setup TEXT NOT NULL,
+        setup_version INTEGER NOT NULL,
+        rank INTEGER,
+        plan_json TEXT NOT NULL,
+        judge_json TEXT,
+        regime TEXT,
+        recorded_at TEXT NOT NULL,
+        outcome_json TEXT,
+        PRIMARY KEY (scan_date, symbol, setup)
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS restrictions (
         list_name TEXT NOT NULL,
         symbol TEXT NOT NULL,
@@ -111,7 +157,8 @@ def initialize_market_schema(connection: sqlite3.Connection) -> None:
     for statement in _TABLES:
         connection.execute(statement)
     row = connection.execute("SELECT MAX(version) FROM market_schema_version").fetchone()
-    if row[0] is None:
+    if row[0] is None or row[0] < MARKET_SCHEMA_VERSION:
+        # New tables are created above with IF NOT EXISTS, so upgrading only records the version.
         connection.execute(
             "INSERT INTO market_schema_version (version, applied_at) "
             "VALUES (?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",

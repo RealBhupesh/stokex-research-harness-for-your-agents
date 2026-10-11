@@ -10,6 +10,11 @@ fetches from the network):
 - ``fo-ban``: ``fo_secban_DDMMYYYY.csv`` F&O ban list.
 - ``restrictions``: ``list,symbol,stage,from_date,to_date`` rows for
   ASM/GSM or other lists the user maintains.
+- ``corp-actions``: NSE corporate actions (splits, bonuses, consolidations
+  become price-adjustment factors; other purposes are counted and skipped).
+- ``index-members``: index constituent lists such as ``ind_nifty500list.csv``
+  (symbol to industry map for sector strength and concentration caps).
+- ``announcements``: NSE corporate announcements, keyword-classified on import.
 
 Column matching ignores case, spaces and punctuation so NSE's padded headers
 work. Structural problems (missing columns, unparseable dates or numbers) fail
@@ -19,7 +24,7 @@ the whole file with a line number; implausible rows are skipped and counted.
 from collections import Counter, defaultdict
 import csv
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 import io
 from pathlib import Path
@@ -27,9 +32,11 @@ import re
 import sqlite3
 
 from ..store.records import StoreValidationError, normalize_timestamp
+from .corporate import classify_announcement, parse_purpose
 
 
-KINDS = ("cm-full", "udiff", "index", "bulk", "block", "fo-ban", "restrictions")
+KINDS = ("cm-full", "udiff", "index", "bulk", "block", "fo-ban", "restrictions", "corp-actions",
+         "index-members", "announcements")
 DEFAULT_SERIES = frozenset({"EQ", "BE", "BZ", "SM", "ST"})
 # Options are only used for the scan-day chain (PCR, IV, OI walls); keep them small.
 DEFAULT_OPTION_EXPIRIES = 1
@@ -155,6 +162,12 @@ def detect_kind(path: Path, text: str) -> str:
         return "block" if "block" in path.name.lower() else "bulk"
     if {"list", "symbol", "fromdate"} <= header:
         return "restrictions"
+    if {"symbol", "purpose", "exdate"} <= header:
+        return "corp-actions"
+    if {"companyname", "industry", "symbol"} <= header:
+        return "index-members"
+    if {"symbol", "subject", "broadcastdatetime"} <= header:
+        return "announcements"
     raise _RowError("KIND_UNKNOWN", "Could not detect the NSE file kind; pass --kind")
 
 
@@ -345,6 +358,74 @@ def _import_restrictions(connection, rows: _Rows, context) -> None:
         context.written += 1
 
 
+def _import_corporate_actions(connection, rows: _Rows, context) -> None:
+    rows.require("SYMBOL", "PURPOSE", "EX-DATE")
+    for line, row in rows:
+        context.line = line
+        series = (rows.get(row, "SERIES") or "EQ").upper()
+        if series not in context.series:
+            context.skip("SERIES_EXCLUDED")
+            continue
+        ex_date = rows.get(row, "EX-DATE")
+        if not ex_date or ex_date.upper() in _MISSING:
+            context.skip("EX_DATE_MISSING")
+            continue
+        parsed = parse_purpose(rows.get(row, "PURPOSE"))
+        if parsed is None:
+            context.skip("PURPOSE_NOT_PRICE_ADJUSTING")
+            continue
+        kind, factor = parsed
+        connection.execute(
+            "INSERT OR REPLACE INTO corporate_actions VALUES (?, ?, ?, ?, ?)",
+            (rows.get(row, "SYMBOL").upper(), parse_date(ex_date), kind, factor, rows.get(row, "PURPOSE")),
+        )
+        context.written += 1
+
+
+def _index_name_from(path: Path) -> str:
+    stem = re.sub(r"^ind_|list$", "", path.stem.lower())
+    return re.sub(r"[^a-z0-9]+", " ", stem).strip().upper() or "INDEX"
+
+
+def _import_index_members(connection, rows: _Rows, context) -> None:
+    rows.require("Symbol", "Industry")
+    as_of = (context.available_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))[:10]
+    for line, row in rows:
+        context.line = line
+        connection.execute(
+            "INSERT OR REPLACE INTO index_members VALUES (?, ?, ?, ?, ?)",
+            (context.index_name, rows.get(row, "Symbol").upper(), (rows.get(row, "Industry") or None),
+             rows.get(row, "ISIN Code", "ISIN") or None, as_of),
+        )
+        context.written += 1
+
+
+def _broadcast_timestamp(value: str) -> str:
+    """NSE broadcast times are IST, e.g. ``22-Sep-2026 18:05:12``; store UTC."""
+    text = (value or "").strip()
+    match = re.fullmatch(r"(.+?)\s+(\d{1,2}):(\d{2})(?::(\d{2}))?", text)
+    if not match:
+        raise _RowError("TIMESTAMP_INVALID", f"Unrecognised broadcast time {value!r}")
+    day = date.fromisoformat(parse_date(match[1]))
+    local = datetime(day.year, day.month, day.day, int(match[2]), int(match[3]), int(match[4] or 0),
+                     tzinfo=timezone(timedelta(hours=5, minutes=30)))
+    return local.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _import_announcements(connection, rows: _Rows, context) -> None:
+    rows.require("SYMBOL", "SUBJECT", "BROADCAST DATE/TIME")
+    for line, row in rows:
+        context.line = line
+        subject = rows.get(row, "SUBJECT") or ""
+        details = rows.get(row, "DETAILS") or ""
+        cursor = connection.execute(
+            "INSERT OR IGNORE INTO announcements VALUES (?, ?, ?, ?, ?, 'KEYWORD')",
+            (rows.get(row, "SYMBOL").upper(), _broadcast_timestamp(rows.get(row, "BROADCAST DATE/TIME")),
+             subject, details, classify_announcement(subject, details)),
+        )
+        context.written += cursor.rowcount
+
+
 class _Context:
     def __init__(self, series, option_expiries, available_at):
         self.series, self.option_expiries, self.available_at = series, option_expiries, available_at
@@ -402,6 +483,9 @@ _IMPORTERS = {
     "bulk": _import_deals("BULK"),
     "block": _import_deals("BLOCK"),
     "restrictions": _import_restrictions,
+    "corp-actions": _import_corporate_actions,
+    "index-members": _import_index_members,
+    "announcements": _import_announcements,
 }
 
 
@@ -413,6 +497,7 @@ def import_market_file(
     series=DEFAULT_SERIES,
     option_expiries: int | None = DEFAULT_OPTION_EXPIRIES,
     available_at: str | None = None,
+    index_name: str | None = None,
 ) -> dict:
     """Import one NSE file atomically and return a summary."""
     path = Path(path)
@@ -435,6 +520,7 @@ def import_market_file(
         return {"path": str(path), "kind": detected, "status": "unchanged", "written": 0, "skipped": {}}
 
     context = _Context(frozenset(s.upper() for s in series), option_expiries, available_at)
+    context.index_name = (index_name or _index_name_from(path)).upper()
     try:
         with connection:
             if detected == "fo-ban":

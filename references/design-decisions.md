@@ -1,5 +1,14 @@
 # Decision-value filter
 
+## Version 5.2 accuracy controls
+
+- Back-adjusted prices for splits, bonuses and consolidations (from the corporate-actions file, or inferred from NSE's adjusted previous close), because raw bhavcopy prices create false breakouts and crashes.
+- Raised the bar for PROVEN: a clustered bootstrap lower bound above zero with a Bonferroni correction, plus stability across time folds, because 30 positive trades across many tested setups is often luck.
+- Added size-dependent market impact, circuit-locked fills and exits, and gap-loss statistics, so backtests do not assume perfect execution.
+- Added a sector map (strength against industry and per-sector caps) and NSE announcements as point-in-time catalysts.
+- Added a walk-forward logistic model as a transparent baseline meta-labeler that Jev must beat, with fixed ridge shrinkage rather than a per-run tuned value.
+- Added a forward-test journal, because only live, frozen predictions are fully out of sample.
+
 ## Version 5.1 Jev meta-labeling
 
 - Added Jev as a meta-labeler on short-term candidates because a calibrated second opinion on each setup instance can raise expectancy without replacing transparent rules.

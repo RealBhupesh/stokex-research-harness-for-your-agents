@@ -59,7 +59,7 @@ _PRICE_KEYS = {
 _DROP_KEYS = {"gap_date", "deal_date", "client", "deal_value"}
 _ROW_KEYS = (
     "ret1", "ret5", "ret20", "ret60", "rs20", "rs60", "vol_ratio", "deliv_ratio", "atr_pct",
-    "close_position", "gap_pct", "base_range20", "atr_contraction",
+    "close_position", "gap_pct", "base_range20", "atr_contraction", "rs_sector20", "rs_sector60",
 )
 
 

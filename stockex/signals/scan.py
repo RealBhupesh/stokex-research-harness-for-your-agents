@@ -1,15 +1,19 @@
 """Scan the liquid universe on one date and rank setups with hard risk plans."""
 
+from bisect import bisect_left
 from dataclasses import asdict, dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 import math
 
 from ..jev.candidates import CANDIDATE_QUESTION_BANK_VERSION, JudgeBudget, candidate_state, judge_state
+from ..market.corporate import CATALYST_CATEGORIES
 from ..market.queries import (
-    deals_between, futures_history, index_closes, load_histories, option_chain, restrictions_on,
+    announcements_between, deals_between, futures_history, index_closes, load_histories, option_chain,
+    restrictions_on, sector_map,
 )
 from .fo import fo_features, option_context
 from .indicators import Features, compute_features
+from .meta_model import MODEL_FEATURE_VERSION, LogisticModel, feature_vector
 from .regime import BENCHMARK_INDEX, VIX_INDEX, benchmark_trend, classify_regime, vix_state
 from .risk_plan import DEFAULT_RISK_PARAMS, Rejection, build_plan
 from .setups import SETUP_VERSIONS, SETUPS, SetupContext, evaluate_setups
@@ -18,7 +22,7 @@ from .setups import SETUP_VERSIONS, SETUPS, SetupContext, evaluate_setups
 MIN_BARS = 60
 SCORE_WEIGHTS = {"strength": 0.35, "edge": 0.25, "reward_risk": 0.15, "liquidity": 0.15, "catalyst": 0.10}
 MIN_PROVEN_TRADES = 30
-JEV_WEIGHT = 0.20
+META_WEIGHT = 0.20
 
 
 @dataclass
@@ -30,6 +34,8 @@ class Universe:
     trend: dict
     vix: dict
     notes: list = field(default_factory=list)
+    sectors: dict = field(default_factory=dict)
+    catalysts: dict = field(default_factory=dict)
 
 
 def _shift(day: str, days: int) -> str:
@@ -50,11 +56,86 @@ def prepare_universe(connection, as_of: str, *, start: str | None = None, lookba
     for deal in deals_between(connection, load_from, as_of):
         deals.setdefault(deal["symbol"], []).append(deal)
     vix = index_closes(connection, VIX_INDEX, as_of)
+    sectors = {symbol: sector for symbol, sector in sector_map(connection).items() if symbol in features}
+    _add_sector_strength(features, sectors)
+    catalysts = _announcement_catalysts(connection, features, load_from, as_of)
+    merged_events: dict = {}
+    for symbol, by_day in catalysts.items():
+        merged_events[symbol] = {day: item["type"] for day, item in by_day.items()}
+    for symbol, by_day in (events or {}).items():
+        merged_events.setdefault(symbol, {}).update(by_day)  # user-supplied events win
+    if features and not sectors:
+        notes.append("No index constituent list imported: sector strength and sector caps are unavailable")
     return Universe(
-        features=features, fo=fo, deals=deals, events=events or {},
+        features=features, fo=fo, deals=deals, events=merged_events,
         trend=benchmark_trend(benchmark) if benchmark else {},
-        vix=vix_state(vix) if vix else {}, notes=notes,
+        vix=vix_state(vix) if vix else {}, notes=notes, sectors=sectors, catalysts=catalysts,
     )
+
+
+def _add_sector_strength(features: dict, sectors: dict) -> None:
+    """Equal-weight industry returns from the imported universe, and each stock's strength against them."""
+    for window in (20, 60):
+        totals: dict = {}
+        for symbol, f in features.items():
+            sector = sectors.get(symbol)
+            if sector is None:
+                continue
+            for day, value in zip(f.series.dates, f.columns[f"ret{window}"]):
+                if value is not None:
+                    bucket = totals.setdefault((sector, day), [0.0, 0])
+                    bucket[0] += value
+                    bucket[1] += 1
+        for symbol, f in features.items():
+            sector = sectors.get(symbol)
+            sector_returns, relative = [], []
+            for day, value in zip(f.series.dates, f.columns[f"ret{window}"]):
+                bucket = totals.get((sector, day)) if sector else None
+                average = bucket[0] / bucket[1] if bucket and bucket[1] >= 3 else None
+                sector_returns.append(average)
+                relative.append(None if average is None or value is None else value - average)
+            f.columns[f"sector_ret{window}"] = sector_returns
+            f.columns[f"rs_sector{window}"] = relative
+
+
+def _effective_day(broadcast_at: str, trading_days: list[str]) -> str | None:
+    """First session whose end-of-day data could react to an announcement (18:30 IST cutoff)."""
+    local = datetime.fromisoformat(broadcast_at.replace("Z", "+00:00")).astimezone(
+        timezone(timedelta(hours=5, minutes=30)))
+    day = local.date()
+    if (local.hour, local.minute) > (18, 30):
+        day += timedelta(days=1)
+    index = bisect_left(trading_days, day.isoformat())
+    return trading_days[index] if index < len(trading_days) else None
+
+
+def _announcement_catalysts(connection, features: dict, start: str, as_of: str) -> dict:
+    result: dict = {}
+    for symbol, rows in announcements_between(connection, start, as_of).items():
+        f = features.get(symbol)
+        if f is None:
+            continue
+        for row in rows:
+            if row["category"] not in CATALYST_CATEGORIES:
+                continue
+            day = _effective_day(row["broadcast_at"], f.series.dates)
+            if day is None:
+                continue
+            result.setdefault(symbol, {}).setdefault(day, {
+                "type": row["category"], "date": day, "source": "NSE announcement",
+                "subject": row["subject"][:160], "verified": True,
+            })
+    return result
+
+
+def _recent_catalyst(universe: Universe, symbol: str, f, i: int, sessions: int = 3) -> dict | None:
+    by_day = universe.catalysts.get(symbol)
+    if not by_day:
+        return None
+    for day in reversed(f.series.dates[max(0, i - sessions + 1):i + 1]):
+        if day in by_day:
+            return dict(by_day[day])
+    return None
 
 
 def breadth_on(universe: Universe, day: str) -> float | None:
@@ -83,9 +164,12 @@ def _track_record(scorecard: dict | None, setup: str, regime: str) -> dict:
         return {"status": "UNPROVEN", "reason": "Setup not in scorecard or version changed"}
     record = entry.get("by_regime", {}).get(regime) or entry.get("overall", {})
     trades, expectancy = record.get("trades", 0), record.get("expectancy_r")
-    status = "PROVEN" if trades >= MIN_PROVEN_TRADES and expectancy is not None and expectancy > 0 else "UNPROVEN"
+    # Scorecards store a statistically tested status; the plain rule is a fallback for hand-made ones.
+    status = record.get("status") or (
+        "PROVEN" if trades >= MIN_PROVEN_TRADES and expectancy is not None and expectancy > 0 else "UNPROVEN")
     return {"status": status, "trades": trades, "hit_rate": record.get("hit_rate"),
-            "expectancy_r": expectancy, "basis": regime if regime in entry.get("by_regime", {}) else "overall"}
+            "expectancy_r": expectancy, "expectancy_lower_bound": record.get("expectancy_lower_bound"),
+            "basis": regime if regime in entry.get("by_regime", {}) else "overall"}
 
 
 def _clip(value: float) -> float:
@@ -150,6 +234,11 @@ def evaluate_day(universe: Universe, day: str, *, setups=None, setup_params=None
         if best is None:
             continue
         _, signal, plan, track, score = best
+        if signal.catalyst is None:
+            catalyst = _recent_catalyst(universe, symbol, f, i)
+            if catalyst is not None:
+                signal.catalyst = catalyst
+                score = _score(signal, plan, bar, track, risk["min_traded_value"])
         candidates.append({
             "symbol": symbol,
             "date": day,
@@ -166,11 +255,32 @@ def evaluate_day(universe: Universe, day: str, *, setups=None, setup_params=None
             "track_record": track,
             "score": score,
             "series": f.series.series[i],
+            "sector": universe.sectors.get(symbol),
+            "sector_strength": _rounded({"rs_sector20": bar.get("rs_sector20"), "rs_sector60": bar.get("rs_sector60")}),
         })
     candidates.sort(key=lambda c: (c["track_record"]["status"] == "PROVEN", c["score"]["total"]), reverse=True)
     for rank, candidate in enumerate(candidates, 1):
         candidate["rank"] = rank
     return {"regime": regime, "candidates": candidates, "rejected": rejected}
+
+
+def apply_sector_cap(candidates: list[dict], max_per_sector: int) -> tuple[list[dict], list[dict]]:
+    """Keep at most ``max_per_sector`` ranked candidates per known industry."""
+    if not max_per_sector:
+        return candidates, []
+    kept, capped, counts = [], [], {}
+    for candidate in candidates:
+        sector = candidate.get("sector")
+        if sector is not None and counts.get(sector, 0) >= max_per_sector:
+            capped.append({"symbol": candidate["symbol"], "setups": [candidate["setup"]], "code": "SECTOR_CAP",
+                           "message": f"Already {max_per_sector} higher-ranked picks in {sector}"})
+            continue
+        if sector is not None:
+            counts[sector] = counts.get(sector, 0) + 1
+        kept.append(candidate)
+    for rank, candidate in enumerate(kept, 1):
+        candidate["rank"] = rank
+    return kept, capped
 
 
 def _fo_snapshot(fo: dict | None, i: int) -> dict | None:
@@ -205,36 +315,70 @@ def jev_proof(scorecard: dict | None, client) -> dict:
             "base_rates": section.get("base_rates", {})}
 
 
-def apply_jev(universe: Universe, day: str, result: dict, client, *, cache=None, scorecard=None,
-              limit: int | None = None) -> dict:
-    """Judge candidates with Jev; filter and re-rank only when the scorecard proves Jev's edge."""
-    proof = jev_proof(scorecard, client)
+def model_proof(scorecard: dict | None) -> dict:
+    """Whether the scorecard's walk-forward model may influence this scan."""
+    section = (scorecard or {}).get("model")
+    if not section or not section.get("coefficients"):
+        return {"status": "NO_SCORECARD", "reason": "No trained model in the scorecard (run `backtest`)"}
+    if section.get("feature_version") != MODEL_FEATURE_VERSION:
+        return {"status": "UNPROVEN", "reason": "Scorecard model used a different feature version"}
+    if section.get("status") != "PROVEN":
+        return {"status": "UNPROVEN", "reason": "; ".join(section.get("reasons", [])) or "Not proven"}
+    return {"status": "PROVEN", "reason": f"Brier skill {section['brier_skill']}, AUC {section['auc']}",
+            "base_rates": section.get("base_rates", {}), "brier_skill": section["brier_skill"]}
+
+
+def apply_meta(universe: Universe, day: str, result: dict, *, scorecard=None, client=None, cache=None,
+               limit: int | None = None) -> dict:
+    """Judge candidates with Jev and/or the walk-forward model; only a PROVEN judge filters and re-ranks.
+
+    When both are PROVEN, the one with the higher out-of-sample Brier skill decides.
+    """
+    proofs = {"MODEL": model_proof(scorecard)}
+    if client is not None:
+        proofs["JEV"] = jev_proof(scorecard, client)
+        if proofs["JEV"]["status"] == "PROVEN":
+            proofs["JEV"]["brier_skill"] = scorecard["jev"]["brier_skill"]
+    proven = [name for name, proof in proofs.items() if proof["status"] == "PROVEN"]
+    chosen = max(proven, key=lambda name: proofs[name]["brier_skill"]) if proven else None
+    model = LogisticModel.from_dict(scorecard["model"]["coefficients"]) \
+        if proofs["MODEL"]["status"] != "NO_SCORECARD" else None
     budget = JudgeBudget(None)
     candidates = result["candidates"] if limit is None else result["candidates"][:limit]
     kept, filtered = [], []
     for candidate in candidates:
         f = universe.features[candidate["symbol"]]
         state = candidate_state(candidate, f.at(f.index_of(day)), result["regime"])
-        judgment = judge_state(state, client, cache, budget)
-        judgment["proof"] = proof["status"]
-        candidate["jev"] = judgment
-        base_rate = proof.get("base_rates", {}).get(candidate["setup"])
-        if proof["status"] != "PROVEN" or judgment["status"] != "JUDGED" or base_rate is None:
-            judgment["effect"] = "NONE"
+        opinions = {}
+        if client is not None:
+            judgment = judge_state(state, client, cache, budget)
+            judgment["proof"] = proofs["JEV"]["status"]
+            candidate["jev"] = opinions["JEV"] = judgment
+        if model is not None:
+            candidate["model"] = opinions["MODEL"] = {
+                "status": "JUDGED", "follow_through": round(model.predict(feature_vector(state, list(SETUPS))), 4),
+                "proof": proofs["MODEL"]["status"],
+            }
+        for opinion in opinions.values():
+            opinion["effect"] = "NONE"
+        decider = opinions.get(chosen) if chosen else None
+        base_rate = proofs[chosen].get("base_rates", {}).get(candidate["setup"]) if chosen else None
+        if decider is None or decider["status"] != "JUDGED" or base_rate is None:
             kept.append(candidate)
             continue
-        p = judgment["follow_through"]
-        judgment["base_rate"] = base_rate
+        p = decider["follow_through"]
+        decider["base_rate"] = base_rate
         if p < base_rate:
-            judgment["effect"] = "FILTERED"
-            filtered.append({"symbol": candidate["symbol"], "setups": [candidate["setup"]], "code": "JEV_FILTERED",
-                             "message": f"Jev follow-through {p:.2f} below the setup base rate {base_rate:.2f}"})
+            decider["effect"] = "FILTERED"
+            filtered.append({"symbol": candidate["symbol"], "setups": [candidate["setup"]],
+                             "code": f"{chosen}_FILTERED",
+                             "message": f"{chosen.title()} follow-through {p:.2f} below the setup base rate {base_rate:.2f}"})
             continue
         edge = _clip((p - base_rate) / 0.3 + 0.5)
         score = candidate["score"]
-        score["components"]["jev_edge"] = round(edge, 4)
-        score["total"] = round((1 - JEV_WEIGHT) * score["total"] + JEV_WEIGHT * edge, 4)
-        judgment["effect"] = "RANKED"
+        score["components"][f"{chosen.lower()}_edge"] = round(edge, 4)
+        score["total"] = round((1 - META_WEIGHT) * score["total"] + META_WEIGHT * edge, 4)
+        decider["effect"] = "RANKED"
         kept.append(candidate)
     kept += [] if limit is None else result["candidates"][limit:]
     kept.sort(key=lambda c: (c["track_record"]["status"] == "PROVEN", c["score"]["total"]), reverse=True)
@@ -242,19 +386,27 @@ def apply_jev(universe: Universe, day: str, result: dict, client, *, cache=None,
         candidate["rank"] = rank
     result["candidates"] = kept
     result["rejected"] = result["rejected"] + filtered
-    return {"proof": proof, "usage": budget.report(), "filtered": len(filtered)}
+    return {"proofs": proofs, "chosen": chosen, "usage": budget.report(), "filtered": len(filtered)}
 
 
 def scan(connection, as_of: str, *, setups=None, setup_params=None, risk_params=None, scorecard=None,
-         events=None, top: int = 10, jev_client=None, jev_cache=None) -> dict:
+         events=None, top: int = 10, jev_client=None, jev_cache=None, live: dict | None = None) -> dict:
     universe = prepare_universe(connection, as_of, events=events)
     restrictions = restrictions_on(connection, as_of, through=_shift(as_of, 4))
     result = evaluate_day(universe, as_of, setups=setups, setup_params=setup_params,
                           risk_params=risk_params, scorecard=scorecard, restrictions=restrictions)
-    jev = None
-    if jev_client is not None:
+    meta = None
+    has_model = bool(((scorecard or {}).get("model") or {}).get("coefficients"))
+    if jev_client is not None or has_model:
         # Judge a few more than ``top`` so filtered names can be replaced.
-        jev = apply_jev(universe, as_of, result, jev_client, cache=jev_cache, scorecard=scorecard, limit=top * 3)
+        meta = apply_meta(universe, as_of, result, scorecard=scorecard, client=jev_client, cache=jev_cache,
+                          limit=top * 3)
+    for candidate in result["candidates"]:
+        if live and candidate["setup"] in live:
+            candidate["track_record"]["live"] = live[candidate["setup"]]
+    max_per_sector = {**DEFAULT_RISK_PARAMS, **(risk_params or {})}["max_per_sector"]
+    result["candidates"], capped = apply_sector_cap(result["candidates"], max_per_sector)
+    result["rejected"] = result["rejected"] + capped
     for candidate in result["candidates"][:top]:
         if candidate["fo"] is not None:
             chain = option_chain(connection, candidate["symbol"], as_of)
@@ -268,12 +420,15 @@ def scan(connection, as_of: str, *, setups=None, setup_params=None, risk_params=
         notes.append("No scorecard supplied: setup edge is unmeasured (run `backtest` first)")
     elif max(scorecard.get("period", {}).get("to", ""), scorecard.get("period", {}).get("data_through", "")) >= as_of:
         notes.append("Scorecard period overlaps the scan date; its track record is in-sample")
-    if jev is not None:
-        if jev["proof"]["status"] == "PROVEN":
-            notes.append(f"Jev is PROVEN ({jev['proof']['reason']}): it filtered {jev['filtered']} candidate(s) "
-                         "and contributes 20% of the score")
-        else:
-            notes.append(f"Jev shown for information only ({jev['proof']['status']}): {jev['proof']['reason']}")
+    if meta is not None:
+        if meta["chosen"]:
+            proof = meta["proofs"][meta["chosen"]]
+            notes.append(f"{meta['chosen'].title()} is PROVEN ({proof['reason']}): it filtered {meta['filtered']} "
+                         "candidate(s) and contributes 20% of the score")
+        for name, proof in meta["proofs"].items():
+            if name == meta["chosen"] or (name == "MODEL" and proof["status"] == "NO_SCORECARD"):
+                continue
+            notes.append(f"{name.title()} shown for information only ({proof['status']}): {proof['reason']}")
     return {
         "as_of": as_of,
         "universe": {"symbols_with_data": len(universe.features), "traded_on_date": len(traded)},
@@ -284,7 +439,7 @@ def scan(connection, as_of: str, *, setups=None, setup_params=None, risk_params=
         "candidates": result["candidates"][:top],
         "candidates_total": len(result["candidates"]),
         "rejected": result["rejected"],
-        "jev": jev,
+        "meta": meta,
         "notes": notes,
         "advisory": "Research output, not investment advice. Setups can fail; gaps can exceed planned stops.",
     }
@@ -308,13 +463,19 @@ def _short(value) -> str:
     return str(value)
 
 
-def _jev_cell(jev: dict | None) -> str:
-    if not jev:
-        return "-"
-    if jev["status"] != "JUDGED":
-        return "unavailable"
-    crowded = ", crowded" if jev["crowding_risk"] >= 0.6 else ""
-    return f"{jev['follow_through']:.0%} to T1, catalyst {jev['catalyst_quality']}{crowded} ({jev['proof']})"
+def _judge_cell(candidate: dict) -> str:
+    parts = []
+    jev, model = candidate.get("jev"), candidate.get("model")
+    if jev:
+        if jev["status"] != "JUDGED":
+            parts.append("Jev unavailable")
+        else:
+            crowded = ", crowded" if jev["crowding_risk"] >= 0.6 else ""
+            parts.append(f"Jev {jev['follow_through']:.0%} to T1, catalyst {jev['catalyst_quality']}{crowded} "
+                         f"({jev['proof']})")
+    if model:
+        parts.append(f"Model {model['follow_through']:.0%} ({model['proof']})")
+    return "; ".join(parts) or "-"
 
 
 def to_markdown(report: dict) -> str:
@@ -333,7 +494,7 @@ def to_markdown(report: dict) -> str:
         lines.append(f"- Note: {note}")
     lines += [
         "",
-        "| # | Symbol | Setup | Catalyst | Key signals | Entry above | Stop | T1 | T2 | R:R net | Time stop | Qty (value) | Track record | Jev |",
+        "| # | Symbol | Setup | Catalyst | Key signals | Entry above | Stop | T1 | T2 | R:R net | Time stop | Qty (value) | Track record | Jev / model |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for c in report["candidates"]:
@@ -348,10 +509,13 @@ def to_markdown(report: dict) -> str:
         record = track["status"] if track["status"] != "PROVEN" else (
             f"{track['trades']} trades, {track['hit_rate']:.0%} hit, {track['expectancy_r']:+.2f}R"
         )
+        live = track.get("live")
+        if live and live.get("trades"):
+            record += f"; live {live['trades']} trades, {live['expectancy_r']:+.2f}R"
         lines.append(
             f"| {c['rank']} | {c['symbol']} | {c['setup']} | {catalyst} | {signals} | {plan['entry']:.2f} | "
             f"{plan['stop']:.2f} | {plan['t1']:.2f} | {plan['t2']:.2f} | {plan['reward_risk_after_costs']:.2f} | "
-            f"{plan['time_stop_sessions']} sessions | {qty} | {record} | {_jev_cell(c.get('jev'))} |"
+            f"{plan['time_stop_sessions']} sessions | {qty} | {record} | {_judge_cell(c)} |"
         )
     if not report["candidates"]:
         lines.append("| - | No candidate passed the setups and hard risk rules | | | | | | | | | | | | |")

@@ -32,3 +32,7 @@ Before the outcome, freeze prediction ID, decision timestamp, evidence packet ha
 For mutually exclusive outcomes, probabilities must be in `[0,1]` and sum to 1. Evaluate Brier score and log loss, reliability bins, coverage of predicted ranges and benchmark-relative outcomes. Small samples do not support confident calibration claims. Segment results by horizon and decision type rather than mixing 5-year investments with 2-week trades.
 
 Learning rule: update weights only after a documented, sufficiently large out-of-sample evaluation. Keep the old model version and record why the new version was accepted. Do not let one lucky winner teach the harness that its narrative was correct.
+
+## Statistical bar for setups and judges
+
+The scorecard applies the rules in [accuracy controls](accuracy-controls.md#3-what-proven-means): a clustered bootstrap bound above zero with a multiple-testing correction, and stability across time folds. A walk-forward model and Jev must also show out-of-sample Brier skill before they influence picks. The forward-test journal is the final check; when live results diverge from the scorecard, trust the journal.

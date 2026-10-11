@@ -50,7 +50,7 @@ class StatusTests(unittest.TestCase):
         inverted = [dict(t, jev_p=1 - t["jev_p"]) for t in informative()]
         reasons = evaluate_jev(inverted)["reasons"]
         self.assertIn("AUC not above 0.55", reasons)
-        self.assertIn("Filtering on Jev does not raise expectancy", reasons)
+        self.assertIn("Filtering on these probabilities does not raise expectancy", reasons)
 
     def test_unjudged_trades_are_excluded_and_counted(self):
         trades = informative() + [trade(None, True, 2.0)]

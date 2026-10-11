@@ -10,6 +10,8 @@ import sqlite3
 import sys
 
 from .backtest import build_scorecard, data_fingerprint, load_scorecard, run_backtest
+from .backtest import journal
+from .jev.announcements import classify_with_jev
 from .jev.cache import JevCache
 from .jev.client import DEFAULT_MODEL, JevClient, JevError
 from .jev.triage import DEFAULT_CONFIDENCE_FLOOR, triage_packet
@@ -76,9 +78,17 @@ def _parser() -> argparse.ArgumentParser:
     market_import.add_argument("--options", choices=("none", "near", "near2", "all"), default="near",
                                help="option rows to keep: none, nearest expiry (default), nearest two, or all")
     market_import.add_argument("--available-at", help="override publication timestamp for every row")
+    market_import.add_argument("--index-name", help="index name for constituent lists (default: from file name)")
 
     market_status = commands.add_parser("market-status", help="report imported market-data coverage and gaps")
     market_status.add_argument("database", type=Path)
+
+    classify = commands.add_parser("announcements-classify",
+                                   help="let Jev classify announcements the keyword rules left as OTHER")
+    classify.add_argument("database", type=Path)
+    classify.add_argument("--jev-model", default=DEFAULT_MODEL)
+    classify.add_argument("--min-confidence", type=float, default=0.6)
+    classify.add_argument("--limit", type=int)
 
     scanner = commands.add_parser("scan", help="rank short-term setups with hard risk plans at a date")
     scanner.add_argument("database", type=Path)
@@ -87,6 +97,15 @@ def _parser() -> argparse.ArgumentParser:
     scanner.add_argument("--scorecard", type=Path, help="scorecard JSON from the backtest command")
     scanner.add_argument("--top", type=int, default=10)
     scanner.add_argument("--format", choices=("json", "md"), default="json")
+    scanner.add_argument("--journal", action="store_true",
+                         help="record the ranked picks in the forward-test journal")
+
+    journal_update = commands.add_parser("journal-update", help="evaluate journal picks with newer data")
+    journal_update.add_argument("database", type=Path)
+    journal_update.add_argument("--as-of", required=True)
+
+    journal_report = commands.add_parser("journal-report", help="live (forward-test) results per setup")
+    journal_report.add_argument("database", type=Path)
 
     backtest = commands.add_parser("backtest", help="walk-forward backtest; writes a setup scorecard")
     backtest.add_argument("database", type=Path)
@@ -199,7 +218,8 @@ def _run(args: argparse.Namespace) -> object:
         with PointInTimeStore.open(args.database) as store:
             return import_jsonl(store, args.source)
 
-    if args.command in {"market-import", "market-status", "scan", "backtest"}:
+    if args.command in {"market-import", "market-status", "scan", "backtest", "announcements-classify",
+                        "journal-update", "journal-report"}:
         return _run_market(args)
 
     with PointInTimeStore.open(args.database) as store:
@@ -230,11 +250,18 @@ def _run_market(args: argparse.Namespace) -> object:
             return [
                 import_market_file(connection, path, kind=args.kind,
                                    option_expiries={"none": 0, "near": 1, "near2": 2, "all": None}[args.options],
-                                   available_at=args.available_at)
+                                   available_at=args.available_at, index_name=args.index_name)
                 for path in args.files
             ]
         if args.command == "market-status":
             return coverage(connection)
+        if args.command == "journal-update":
+            return journal.update_outcomes(connection, _check_date(args.as_of, "--as-of"))
+        if args.command == "journal-report":
+            return journal.report(connection)
+        if args.command == "announcements-classify":
+            return classify_with_jev(connection, jev_client_factory(args.jev_model),
+                                     min_confidence=args.min_confidence, limit=args.limit)
         events = _read_events(args.events)
         jev_client = jev_client_factory(args.jev_model) if args.jev else None
         jev_cache = JevCache(connection) if args.jev else None
@@ -243,7 +270,10 @@ def _run_market(args: argparse.Namespace) -> object:
             scorecard = load_scorecard(args.scorecard) if args.scorecard else None
             report = scan(connection, as_of, setups=args.setups, risk_params=_risk_params(args),
                           scorecard=scorecard, events=events, top=args.top,
-                          jev_client=jev_client, jev_cache=jev_cache)
+                          jev_client=jev_client, jev_cache=jev_cache,
+                          live=journal.live_records(connection))
+            if args.journal:
+                report["journal_recorded"] = journal.record_scan(connection, report)
             return to_markdown(report) if args.format == "md" else report
         start, end = _check_date(args.start, "--from"), _check_date(args.end, "--to")
         if start > end:

@@ -129,13 +129,26 @@ class MarketCliTests(unittest.TestCase):
             code, text, error = self.call(["scan", str(self.database), "--as-of", self.last_date(),
                                            "--jev", "--jev-model", "jev-stub", "--format", "md"])
         self.assertEqual((code, error), (0, None))
-        self.assertIn("| Jev |", text)
+        self.assertIn("| Jev / model |", text)
         self.assertEqual(models, ["jev-stub", "jev-stub"])
 
     def test_jev_without_api_key_is_structured_error(self):
         with mock.patch.dict(os.environ, {}, clear=True):
             code, payload, error = self.call(["scan", str(self.database), "--as-of", self.last_date(), "--jev"])
         self.assertEqual((code, payload, error["code"]), (2, None, "JEV_CONFIG_MISSING"))
+
+    def test_journal_commands(self):
+        status = self.call(["market-status", str(self.database)])[1]
+        code, report, error = self.call(["scan", str(self.database), "--as-of", "2026-04-01", "--journal"])
+        self.assertEqual((code, error), (0, None))
+        self.assertEqual(report["journal_recorded"], len(report["candidates"]))
+        code, counts, error = self.call(["journal-update", str(self.database), "--as-of", status["bars"]["last"]])
+        self.assertEqual((code, error), (0, None))
+        self.assertEqual(counts["open"], 0)
+        code, live, error = self.call(["journal-report", str(self.database)])
+        self.assertEqual((code, error), (0, None))
+        self.assertIn("by_setup", live)
+        self.assertGreaterEqual(sum(live["entries"].values()), len(report["candidates"]))
 
 
 if __name__ == "__main__":

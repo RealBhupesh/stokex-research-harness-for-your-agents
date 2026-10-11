@@ -20,6 +20,9 @@ Download these for each session and load them with `python -m stockex.cli market
 | Full bhavcopy with delivery | `sec_bhavdata_full_DDMMYYYY.csv` | OHLC, prev close, volume, turnover, delivered quantity, delivery % by series |
 | UDiFF CM bhavcopy | `BhavCopy_NSE_CM_0_0_0_YYYYMMDD_F_0000.csv` | Cash-market OHLCV in the UDiFF format with ISIN |
 | UDiFF F&O bhavcopy | `BhavCopy_NSE_FO_0_0_0_YYYYMMDD_F_0000.csv` | Futures and options OHLC, settlement, OI, change in OI, by expiry and strike |
+| Corporate actions | NSE corporate actions export (columns include `SYMBOL`, `PURPOSE`, `EX-DATE`) | Splits, bonuses and consolidations used to back-adjust prices |
+| Index constituents | e.g. `ind_nifty500list.csv` (`Company Name, Industry, Symbol, Series, ISIN Code`) | Symbol-to-industry map for sector strength and sector caps |
+| Corporate announcements | NSE announcements export (`SYMBOL`, `SUBJECT`, `DETAILS`, `BROADCAST DATE/TIME`) | Results, orders, buybacks and other catalysts, classified on import |
 | Index closing values | `ind_close_all_DDMMYYYY.csv` | Nifty, sector and strategy index closes for benchmark and RS |
 | Bulk deals | bulk-deals CSV | Client name, buy/sell, quantity, price |
 | Block deals | block-deals CSV | Same, for the block window |

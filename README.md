@@ -33,7 +33,8 @@ flowchart TD
 - `references/analyst-playbook.md`, `references/short-term-playbook.md`, `references/india-market-calendar.md`, `references/sector-kpis.md`: what expert analysts and traders check, the catalysts that move Indian stocks over days, recurring event dates and sector lead indicators.
 - `stockex/market/`: importers and point-in-time queries for NSE bhavcopy (with delivery), UDiFF CM/F&O bhavcopy, index closes, bulk/block deals, the F&O ban list and ASM/GSM lists.
 - `stockex/signals/`: indicators, F&O positioning (OI quadrant, rollover, PCR, IV), market regime, nine named setups, the hard risk plan and the scanner.
-- `stockex/backtest/`: walk-forward backtester and frozen setup scorecards.
+- `stockex/backtest/`: walk-forward backtester, statistical tests behind PROVEN, frozen setup scorecards and the forward-test journal.
+- `references/accuracy-controls.md`: corporate-action adjustment, the journal, the statistics behind PROVEN, execution realism, sectors, announcements and the walk-forward model.
 - `references/`: gated research rules for evidence, world drivers, attribution, normalization, forecasts, expectations, catalysts, management, relationships, risks, legal-credit, portfolio, execution and calibration.
 - `prompts/deep-stock-research.md`: portable full-research prompt that delays opinion until the evidence, charts, risk register and adversarial review are complete.
 - `templates/`: trade ideas, intake, evidence ledger, financial worksheet, shortlist, recommendation, risk register, market context, portfolio map, prediction record, monitoring, backtest report and decision journal.
@@ -70,7 +71,7 @@ Keep runtime databases and generated packets outside the repository.
 
 Use the `AGGRESSIVE_SHORT_TERM` mandate ([momentum trading skill](skills/india-momentum-trading/SKILL.md)) when you want stocks that could move over the next few sessions. It is served directly rather than pushed to "reframe", and every pick carries an entry trigger, stop, T1/T2, time stop and position size. Illiquid, BE/BZ-series, ASM/GSM/ESM and F&O-ban names are blocked. F&O data is used only as a signal; the harness never suggests futures or options trades.
 
-1. Download NSE end-of-day files for at least 12–18 months (full bhavcopy with delivery, the F&O UDiFF bhavcopy, the index close file, and bulk/block deals). The file list and where to find them are in [tools](references/tools.md). Downloads are manual or done by an agent's browser; nothing here scrapes NSE.
+1. Download NSE end-of-day files for at least 12–18 months: the full bhavcopy with delivery, the F&O UDiFF bhavcopy, the index close file and bulk/block deals. Add the corporate-actions file (splits and bonuses), an index constituent list such as `ind_nifty500list.csv` (sectors) and corporate announcements (catalysts). The file list and where to find them are in [tools](references/tools.md). Downloads are manual or done by an agent's browser; nothing here scrapes NSE.
 2. Import them and check coverage:
 
    ```bash
@@ -84,13 +85,20 @@ Use the `AGGRESSIVE_SHORT_TERM` mandate ([momentum trading skill](skills/india-m
    python -m stockex.cli backtest market.sqlite3 --from 2025-10-01 --to 2026-08-31 --capital 500000 --out scorecard.json
    ```
 
-4. Scan the latest session and rank candidates:
+4. Scan the latest session and rank candidates, recording the picks in the forward-test journal:
 
    ```bash
-   python -m stockex.cli scan market.sqlite3 --as-of 2026-09-22 --capital 500000 --risk-per-trade 0.01 --scorecard scorecard.json --format md
+   python -m stockex.cli scan market.sqlite3 --as-of 2026-09-22 --capital 500000 --risk-per-trade 0.01 --scorecard scorecard.json --journal --format md
    ```
 
-The scanner looks for these setups: 52-week breakouts, base breakouts after volatility contraction, pullbacks in uptrends, futures long buildup and short covering, delivery accumulation, bulk/block-deal follow-through, earnings-gap drift, and relative-strength leaders in a weak market. Their exact default rules are listed in the [short-term playbook](references/short-term-playbook.md#scanner-map). A setup ranks as `PROVEN` only when the scorecard shows at least 30 trades with positive expectancy after costs; everything else is labelled `UNPROVEN` and ranked below it. On random data the backtester measures no edge, which is the point: it only credits a setup that has earned it on your data. Add `--events events.csv` (`symbol,date,type`) to label results or other catalysts, and always verify the catalyst from the primary filing before acting.
+5. As new sessions arrive, score the journal. Live results are the real test of a setup or judge:
+
+   ```bash
+   python -m stockex.cli journal-update market.sqlite3 --as-of 2026-10-09
+   python -m stockex.cli journal-report market.sqlite3
+   ```
+
+The scanner looks for these setups: 52-week breakouts, base breakouts after volatility contraction, pullbacks in uptrends, futures long buildup and short covering, delivery accumulation, bulk/block-deal follow-through, earnings-gap drift, and relative-strength leaders in a weak market. Their exact default rules are listed in the [short-term playbook](references/short-term-playbook.md#scanner-map). A setup ranks as `PROVEN` only when its expectancy after costs is positive with statistical confidence. That means at least 30 trades, a lower confidence bound above zero from a bootstrap that resamples whole signal days with a correction for testing many setups, and positive results in most time folds. Everything else is labelled `UNPROVEN` and ranked below it. Prices are adjusted for splits and bonuses, costs include size-dependent market impact, and locked circuits block fills. A walk-forward model and, optionally, Jev act as measured trade filters. The details are in [accuracy controls](references/accuracy-controls.md). On random data the backtester measures no edge, which is the point: it only credits a setup that has earned it on your data. Add `--events events.csv` (`symbol,date,type`) to label results or other catalysts, and always verify the catalyst from the primary filing before acting.
 
 Add `--jev` to both `backtest` and `scan` to use TypeSafe AI's Jev as a meta-labeling filter. Jev judges each candidate from an anonymized state (no symbols, dates or prices). The backtest measures whether its probabilities beat each setup's base rate, and only a `PROVEN` Jev may filter or re-rank picks. See [Jev meta-labeling](references/jev-meta-labeling.md).
 

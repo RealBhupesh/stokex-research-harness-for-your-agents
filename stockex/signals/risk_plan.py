@@ -18,6 +18,8 @@ DEFAULT_RISK_PARAMS = {
     "t2_r": 3.0,
     "min_reward_risk": 2.0,
     "round_trip_cost_bps": 45.0,
+    # Square-root market impact per side: coefficient x sqrt(position value / median daily value).
+    "impact_coefficient_bps": 100.0,
     "min_traded_value": 5e7,
     "max_participation": 0.02,
     "min_price": 20.0,
@@ -25,6 +27,8 @@ DEFAULT_RISK_PARAMS = {
     # BE = trade-for-trade (often surveillance), BZ = non-compliant issuers.
     "blocked_series": ("BE", "BZ"),
     "risk_off_size_multiplier": 0.5,
+    # Maximum picks (scan) or open positions (portfolio backtest) per industry; 0 disables.
+    "max_per_sector": 2,
 }
 
 
@@ -40,6 +44,7 @@ class TradePlan:
     time_stop_sessions: int
     trail_rule: str
     round_trip_cost_per_share: float
+    impact_bps_per_side: float = 0.0
     shares: int | None = None
     position_value: float | None = None
     planned_loss: float | None = None
@@ -108,16 +113,28 @@ def build_plan(signal, bar: dict, *, restrictions: list[str] | None = None, regi
         if regime == "RISK_OFF":
             risk_budget *= p["risk_off_size_multiplier"]
             plan.size_notes.append(f"RISK_OFF regime: risk budget x{p['risk_off_size_multiplier']:g}")
-        by_risk = math.floor(risk_budget / (risk + cost))
         by_cash = math.floor(capital * p["max_position_pct"] / entry)
         by_liquidity = math.floor(value_med * p["max_participation"] / entry)
-        shares = min(by_risk, by_cash, by_liquidity)
+        total_cost = cost
+        for _ in range(2):  # size with the current cost, then re-price impact for that size
+            by_risk = math.floor(risk_budget / (risk + total_cost))
+            shares = min(by_risk, by_cash, by_liquidity)
+            impact = p["impact_coefficient_bps"] * math.sqrt(max(shares, 0) * entry / value_med)
+            total_cost = entry * (p["round_trip_cost_bps"] + 2 * impact) / 10_000
         limiter = next(name for value, name in (
             (by_risk, "risk budget"), (by_cash, "max position %"), (by_liquidity, "liquidity")) if value == shares)
         if shares < 1:
             return Rejection("SIZE_ZERO", f"Position rounds to zero shares (limited by {limiter})")
+        reward_risk = (t2 - entry - total_cost) / (risk + total_cost)
+        if reward_risk < p["min_reward_risk"]:
+            return Rejection("REWARD_RISK_TOO_LOW",
+                             f"Reward/risk after costs and {impact:.1f} bp/side impact {reward_risk:.2f} < "
+                             f"{p['min_reward_risk']:g}")
+        plan.reward_risk_after_costs = round(reward_risk, 3)
+        plan.round_trip_cost_per_share = round(total_cost, 4)
+        plan.impact_bps_per_side = round(impact, 2)
         plan.shares = shares
         plan.position_value = round(shares * entry, 2)
-        plan.planned_loss = round(shares * (risk + cost), 2)
+        plan.planned_loss = round(shares * (risk + total_cost), 2)
         plan.size_notes.append(f"Size limited by {limiter}")
     return plan

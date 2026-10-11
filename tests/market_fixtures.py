@@ -191,3 +191,27 @@ def _last_thursday(day: date) -> date:
     while last.weekday() != 3:
         last -= timedelta(days=1)
     return last if last >= day else _last_thursday(following)
+
+
+CORP_ACTIONS_HEADER = ('"SYMBOL","COMPANY NAME","SERIES","PURPOSE","FACE VALUE","EX-DATE","RECORD DATE",'
+                       '"BOOK CLOSURE START DATE","BOOK CLOSURE END DATE"')
+
+
+def write_corp_actions(path, rows):
+    """rows: (symbol, purpose, ex_date)"""
+    lines = [f'"{s}","{s} LTD","EQ","{purpose}","10","{nse_date(ex)}","-","-","-"' for s, purpose, ex in rows]
+    path.write_text(CORP_ACTIONS_HEADER + "\n" + "\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_index_members(path, rows):
+    """rows: (symbol, industry)"""
+    lines = [f"{s} Ltd.,{industry},{s},EQ,INE{index:09d}" for index, (s, industry) in enumerate(rows)]
+    path.write_text("Company Name,Industry,Symbol,Series,ISIN Code\n" + "\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_announcements(path, rows):
+    """rows: (symbol, subject, day, 'HH:MM:SS')"""
+    header = '"SYMBOL","COMPANY NAME","SUBJECT","DETAILS","BROADCAST DATE/TIME","RECEIPT","DISSEMINATION"'
+    lines = [f'"{s}","{s} LTD","{subject}","{subject} details","{nse_date(day)} {clock}","-","-"'
+             for s, subject, day, clock in rows]
+    path.write_text(header + "\n" + "\n".join(lines) + "\n", encoding="utf-8")

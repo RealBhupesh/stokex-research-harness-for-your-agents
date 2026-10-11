@@ -199,7 +199,7 @@ def earnings_gap_drift(f, i, ctx, p):
         return None
     event = ctx.events.get(s.dates[g]) or ctx.events.get(s.dates[g - 1])
     catalyst = (
-        {"type": event, "date": s.dates[g], "source": "user events file", "verified": True}
+        {"type": event, "date": s.dates[g], "source": "event calendar", "verified": True}
         if event else
         {"type": "UNEXPLAINED_GAP", "date": s.dates[g], "source": None, "verified": False}
     )

@@ -218,7 +218,8 @@ class RiskPlanTests(unittest.TestCase):
         return Signal("BREAKOUT_52W", 1, 0.8, entry, stop, 7, {})
 
     def test_plan_targets_costs_and_size(self):
-        plan = build_plan(self.signal(), self.bar, params={"capital": 1_000_000, "risk_per_trade": 0.01})
+        plan = build_plan(self.signal(), self.bar,
+                          params={"capital": 1_000_000, "risk_per_trade": 0.01, "impact_coefficient_bps": 0})
         self.assertIsInstance(plan, TradePlan)
         self.assertAlmostEqual(plan.risk_per_share, 3.1)
         self.assertEqual((plan.t1, plan.t2), (round(101.1 + 4.65, 2), round(101.1 + 9.3, 2)))
@@ -249,11 +250,22 @@ class RiskPlanTests(unittest.TestCase):
                 self.assertEqual(result.code, code)
 
     def test_risk_off_halves_risk_budget(self):
-        params = {"capital": 1_000_000, "risk_per_trade": 0.005}
+        params = {"capital": 1_000_000, "risk_per_trade": 0.005, "impact_coefficient_bps": 0}
         on = build_plan(self.signal(), self.bar, params=params)
         off = build_plan(self.signal(), self.bar, regime="RISK_OFF", params=params)
         self.assertEqual(on.size_notes, ["Size limited by risk budget"])
         self.assertEqual(off.shares, on.shares // 2)
+
+    def test_market_impact_grows_with_order_size(self):
+        small = build_plan(self.signal(), self.bar, params={"capital": 200_000})
+        large = build_plan(self.signal(), dict(self.bar, value_med20=6e7), params={"capital": 5_000_000})
+        self.assertGreater(large.impact_bps_per_side, small.impact_bps_per_side)
+        expected = 100 * (small.position_value / 2e8) ** 0.5
+        self.assertAlmostEqual(small.impact_bps_per_side, round(expected, 2), places=1)
+        self.assertGreater(small.round_trip_cost_per_share, 101.1 * 45 / 10_000)
+        crushed = build_plan(self.signal(), dict(self.bar, value_med20=6e7),
+                             params={"capital": 50_000_000, "impact_coefficient_bps": 2000, "max_participation": 1})
+        self.assertEqual(crushed.code, "REWARD_RISK_TOO_LOW")
 
 
 if __name__ == "__main__":
