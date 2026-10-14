@@ -1,5 +1,5 @@
 {
-  "version": "5.2.0.dev2",
+  "version": "5.3.0.dev1",
   "created": "2026-09-13",
   "entrypoint": "SKILL.md",
   "specialist_skills": [
@@ -16,7 +16,7 @@
     "india-equity-thesis-monitor",
     "india-momentum-trading"
   ],
-  "data_integrations": "offline local SQLite evidence store; NSE end-of-day files (bhavcopy with delivery, UDiFF CM/F&O, index closes, bulk/block deals, F&O ban and ASM/GSM lists) imported from user or agent downloads; optional Jev (TypeSafe AI) via TYPESAFE_API_KEY: advisory evidence triage and a short-term meta-labeling filter that counts only when backtest-proven; no scraping, live feed, source-authenticity or completeness guarantee",
+  "data_integrations": "offline local SQLite evidence store; NSE end-of-day files (bhavcopy with delivery, UDiFF CM/F&O, index closes, bulk/block deals, F&O ban and ASM/GSM lists) imported from user or agent downloads; optional Jev (TypeSafe AI) via TYPESAFE_API_KEY: advisory evidence triage and a short-term meta-labeling filter that counts only when backtest-proven; no scraping, live feed, source-authenticity or completeness guarantee; optional read-only Upstox V3 daily-candle adapter with raw-response hashes and retrieval availability; strict research blocks unverified provider adjustment basis; no live account validation",
   "performance_status": "short-term setups and meta-labelers are measured by the walk-forward backtester (clustered bootstrap bounds, multiple-testing correction, fold stability) and the forward-test journal on the user's imported data; no edge is claimed until a scorecard shows it",
   "files": [
     ".github/workflows/ci.yml",
@@ -25,11 +25,13 @@
     "README.md",
     "SKILL.md",
     "assets/stockex-hero.jpg",
+    "docs/agent-research.md",
     "docs/production-operations.md",
     "docs/superpowers/plans/2026-09-13-stockex-v3-implementation.md",
     "docs/superpowers/plans/2026-09-15-point-in-time-data-foundation.md",
     "docs/superpowers/specs/2026-09-13-institutional-equity-research-os-design.md",
     "docs/superpowers/specs/2026-09-15-point-in-time-data-foundation-design.md",
+    "docs/upstox-data.md",
     "manifest.json",
     "prompts/deep-stock-research.md",
     "pyproject.toml",
@@ -79,6 +81,7 @@
     "references/variant-perception.md",
     "references/world-to-stock-transmission.md",
     "schema/decision-packet.schema.json",
+    "schema/upstox-instruments.schema.json",
     "scripts/USAGE.md",
     "scripts/calibration.py",
     "scripts/decision_helpers.py",
@@ -121,6 +124,10 @@
     "stockex/market/queries.py",
     "stockex/market/schema.py",
     "stockex/operations.py",
+    "stockex/providers/__init__.py",
+    "stockex/providers/upstox.py",
+    "stockex/research.py",
+    "stockex/research_run.py",
     "stockex/signals/__init__.py",
     "stockex/signals/fo.py",
     "stockex/signals/indicators.py",
@@ -157,6 +164,7 @@
     "templates/thesis-monitor.md",
     "templates/trade-ideas.md",
     "templates/world-exposure-map.md",
+    "tests/fixtures/research-synthesis.json",
     "tests/market_fixtures.py",
     "tests/test_backtest.py",
     "tests/test_calibration.py",
@@ -178,14 +186,18 @@
     "tests/test_portfolio_execution.py",
     "tests/test_production_controls.py",
     "tests/test_repository_integrity.py",
+    "tests/test_research.py",
+    "tests/test_research_run.py",
     "tests/test_risk_helpers.py",
     "tests/test_scan_context.py",
+    "tests/test_scorecard_provenance.py",
     "tests/test_signals.py",
     "tests/test_statistics.py",
     "tests/test_store_cli.py",
     "tests/test_store_database.py",
     "tests/test_store_queries.py",
     "tests/test_store_records.py",
-    "tests/test_store_schema.py"
+    "tests/test_store_schema.py",
+    "tests/test_upstox_provider.py"
   ]
 }

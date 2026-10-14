@@ -10,6 +10,7 @@ the open, and when a bar touches both the stop and a target, the stop wins.
 from bisect import bisect_right
 from collections import defaultdict
 from datetime import date, timedelta
+import math
 
 from ..jev.calibration import evaluate_jev
 from ..jev.candidates import CANDIDATE_QUESTION_BANK_VERSION, JudgeBudget, candidate_state, judge_state
@@ -37,9 +38,11 @@ def simulate_trade(series, signal_index: int, plan: dict, *, cost_bps: float) ->
         fill = entry
     else:
         return {"filled": False, "signal_date": series.dates[signal_index]}
+    if fill >= t1:
+        return {"filled": False, "signal_date": series.dates[signal_index], "reason": "GAP_AT_OR_ABOVE_T1"}
     initial_risk = fill - stop
     if initial_risk <= 0:
-        return {"filled": False, "signal_date": series.dates[signal_index], "reason": "GAP_ABOVE_TARGET_RISK"}
+        return {"filled": False, "signal_date": series.dates[signal_index], "reason": "INVALID_FILL_RISK"}
 
     remaining, realised, legs = 1.0, 0.0, []
     current_stop, t1_hit = stop, False
@@ -90,6 +93,7 @@ def simulate_trade(series, signal_index: int, plan: dict, *, cost_bps: float) ->
         "exit_date": series.dates[exit_index],
         "fill": round(fill, 4),
         "initial_stop": stop,
+        "round_trip_cost_per_share": cost,
         "exit_reason": exit_reason,
         "legs": legs,
         "return_pct": net / fill,
@@ -178,15 +182,17 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
             trade = simulate_trade(f.series, f.index_of(day), plan, cost_bps=cost_bps)
             if trade and trade["filled"]:
                 trade["price_scale"] = 1 / factor
-                for key in ("fill", "initial_stop"):
+                for key in ("fill", "initial_stop", "round_trip_cost_per_share"):
                     trade[key] /= factor
                 for leg in trade["legs"]:
                     leg["price"] /= factor
             if trade and trade["filled"]:
                 trade.update(symbol=candidate["symbol"], setup=candidate["setup"],
                              regime=result["regime"]["label"], score=candidate["score"]["total"],
-                             shares=candidate["plan"]["shares"],
+                             shares=_fill_shares(candidate["plan"], trade, capital),
                              t1_hit=any(leg["reason"] in {"T1", "T2"} for leg in trade["legs"]))
+                if not trade["shares"]:
+                    continue  # A gap can make even one share exceed the frozen budgets.
                 signal_f = signal_universe.features[candidate["symbol"]]
                 state = candidate_state(candidate, signal_f.at(signal_f.index_of(day)), result["regime"])
                 trade["model_features"] = feature_vector(state, setup_names)
@@ -264,6 +270,37 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
     }
 
 
+def _trade_cost(trade: dict) -> float:
+    """Use the fill-time estimate; legacy reports can reconstruct it from returns."""
+    if "round_trip_cost_per_share" in trade:
+        return trade["round_trip_cost_per_share"]
+    return max(0.0, sum(leg["fraction"] * leg["price"] for leg in trade["legs"])
+               - trade["fill"] * (1 + trade["return_pct"]))
+
+
+def _fill_shares(plan: dict, trade: dict, cash: float) -> int:
+    """Shrink a gap fill to its frozen risk, exposure and available-cash budgets."""
+    planned = plan.get("shares") or 0
+    if not planned:
+        return 0
+    fill, cost = trade["fill"], _trade_cost(trade)
+    entry = plan.get("entry", fill)
+    exposure = plan.get("position_value")
+    if exposure is None:
+        exposure = planned * entry
+    limits = [planned, math.floor(max(0, cash) / fill), math.floor(max(0, exposure) / fill)]
+    stop = plan.get("stop", trade.get("initial_stop"))
+    if stop is not None:
+        actual_risk = fill - stop + cost
+        frozen_risk = plan.get("planned_loss")
+        if frozen_risk is None:
+            frozen_risk = planned * (entry - stop + plan.get("round_trip_cost_per_share", cost))
+        if actual_risk <= 0 or frozen_risk <= 0:
+            return 0
+        limits.append(math.floor(frozen_risk / actual_risk))
+    return max(0, min(limits))
+
+
 def _portfolio(universe, days, daily_candidates, signal_trades, capital, max_positions, benchmark,
                max_per_sector: int = 0) -> dict:
     # Submit ranked orders at the signal close; execute only on their entry session.
@@ -284,8 +321,7 @@ def _portfolio(universe, days, daily_candidates, signal_trades, capital, max_pos
             if index in position["settled"] or leg["date"] > day or leg["reason"] == "END_OF_DATA":
                 continue
             fraction = leg["fraction"]
-            cost = trade["fill"] + sum(item["fraction"] * (item["price"] - trade["fill"])
-                                         for item in trade["legs"]) - trade["fill"] * (1 + trade["return_pct"])
+            cost = _trade_cost(trade)
             cash += position["shares"] * fraction * (leg["price"] - cost)
             position["remaining"] -= fraction
             position["settled"].add(index)
@@ -297,7 +333,7 @@ def _portfolio(universe, days, daily_candidates, signal_trades, capital, max_pos
         for candidate, trade in pending.get(day, []):
             if len(open_positions) >= max_positions:
                 break
-            shares, sector = candidate["plan"]["shares"], candidate.get("sector")
+            shares, sector = _fill_shares(candidate["plan"], trade, cash), candidate.get("sector")
             if not shares or trade["symbol"] in busy:
                 continue
             if max_per_sector and sector is not None and sum(

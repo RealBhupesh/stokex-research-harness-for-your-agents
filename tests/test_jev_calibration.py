@@ -1,4 +1,5 @@
 import unittest
+from datetime import date, timedelta
 
 from stockex.jev.calibration import MIN_JUDGED_TRADES, auc, brier, evaluate_jev, reliability
 
@@ -15,7 +16,10 @@ def informative(n=60):
         p = 0.8 if hit else 0.2
         if i % 10 == 0:
             p = 0.2  # a confident miss on a winner
-        trades.append(trade(p, hit, 1.5 if hit else -1.0))
+        item = trade(p, hit, 1.5 if hit else -1.0)
+        item.update(signal_date=(date(2025, 1, 1) + timedelta(days=2 * i)).isoformat(),
+                    exit_date=(date(2025, 1, 2) + timedelta(days=2 * i)).isoformat())
+        trades.append(item)
     return trades
 
 
@@ -44,7 +48,7 @@ class StatusTests(unittest.TestCase):
 
     def test_each_rule_can_fail_alone(self):
         constant = [dict(t, jev_p=0.5) for t in informative()]
-        self.assertIn("Brier skill vs setup base rates is not positive", evaluate_jev(constant)["reasons"])
+        self.assertEqual(evaluate_jev(constant)["status"], "UNPROVEN")
         few = informative()[:MIN_JUDGED_TRADES - 10]
         self.assertTrue(any(r.startswith("Only") for r in evaluate_jev(few)["reasons"]))
         inverted = [dict(t, jev_p=1 - t["jev_p"]) for t in informative()]
@@ -57,6 +61,41 @@ class StatusTests(unittest.TestCase):
         report = evaluate_jev(trades)
         self.assertEqual((report["judged_trades"], report["unjudged_trades"]), (60, 1))
         self.assertEqual(evaluate_jev([trade(None, True, 1.0)])["status"], "UNPROVEN")
+
+    def test_one_correlated_signal_day_cannot_prove_a_judge(self):
+        items = [dict(t, signal_date="2025-01-01", exit_date="2025-01-02") for t in informative()]
+        result = evaluate_jev(items)
+        self.assertEqual(result["status"], "UNPROVEN")
+        self.assertEqual(result["signal_days"], 1)
+
+    def test_missing_provenance_and_invalid_probabilities_fail_closed(self):
+        items = informative()
+        for t in items:
+            t.pop("exit_date")
+        self.assertEqual(evaluate_jev(items)["status"], "UNPROVEN")
+        items = informative() + [trade(float("nan"), True, 1)]
+        result = evaluate_jev(items)
+        self.assertEqual(result["status"], "UNPROVEN")
+        self.assertEqual(result["invalid_trades"], 1)
+
+    def test_baseline_does_not_see_unfinished_or_future_outcomes(self):
+        items = [dict(trade(.6, True, 1), signal_date="2025-01-01", exit_date="2025-02-01"),
+                 dict(trade(.6, False, -1), signal_date="2025-01-02", exit_date="2025-02-02")]
+        report = evaluate_jev(items)
+        self.assertEqual(report["base_brier"], .25)
+        # Both probabilities exceed the causal .5 baseline despite the later win rate.
+        self.assertEqual(report["filtered"]["trades"], 2)
+        future = dict(trade(.9, True, 1), signal_date="2025-03-01", exit_date="2025-03-02")
+        report = evaluate_jev(items + [future])
+        self.assertEqual(report["filtered"]["trades"], 3)
+
+    def test_folds_keep_same_day_trades_together_and_proof_is_deterministic(self):
+        items = informative(80)
+        report = evaluate_jev(items)
+        self.assertEqual(report, evaluate_jev(list(reversed(items))))
+        self.assertEqual(len(report["folds"]), 4)
+        self.assertTrue(all(f["signal_days"] >= 5 for f in report["folds"]))
+        self.assertGreater(report["confidence_lower_bounds"]["brier_improvement"], 0)
 
     def test_base_rates_are_per_setup(self):
         trades = informative() + [trade(0.9, True, 2.0, setup="LONG_BUILDUP") for _ in range(4)]

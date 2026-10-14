@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
-from stockex.backtest.engine import _portfolio, _stats
+from stockex.backtest.engine import _fill_shares, _portfolio, _stats
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -81,10 +81,12 @@ class SimulateTradeTests(unittest.TestCase):
         trade = simulate_trade(series_after((99.5, 101, 99, 100.5)), 0, plan, cost_bps=0)
         self.assertAlmostEqual(trade["r_multiple"], (0.5 - 1.0) / 5)
 
-    def test_gap_above_target_on_entry_day_never_books_below_fill(self):
+    def test_gap_at_or_above_first_target_cancels_entry(self):
         trade = simulate_trade(series_after((120, 121, 119, 120)), 0, PLAN, cost_bps=0)
-        self.assertEqual(trade["fill"], 120)
-        self.assertTrue(all(leg["price"] >= 120 for leg in trade["legs"]))
+        self.assertFalse(trade["filled"])
+        self.assertEqual(trade["reason"], "GAP_AT_OR_ABOVE_T1")
+        at_t1 = simulate_trade(series_after((107.5, 108, 107, 108)), 0, PLAN, cost_bps=0)
+        self.assertFalse(at_t1["filled"])
 
 
 class PortfolioAccountingTests(unittest.TestCase):
@@ -94,6 +96,27 @@ class PortfolioAccountingTests(unittest.TestCase):
         candidate = {"symbol": "X", "plan": {"shares": 10}}
         daily = {day: ("NEUTRAL", [candidate] if day == days[0] else []) for day in days}
         return _portfolio(universe, days, daily, [trade], 1000, 5, {})
+
+    def test_gap_size_preserves_frozen_loss_budget_including_costs(self):
+        plan = dict(PLAN, shares=100, round_trip_cost_per_share=1,
+                    planned_loss=600, position_value=10000)
+        trade = {"fill": 105, "round_trip_cost_per_share": 1.05}
+        shares = _fill_shares(plan, trade, 100000)
+        self.assertEqual(shares, 54)
+        self.assertLessEqual(shares * (105 - PLAN["stop"] + 1.05), 600)
+        self.assertLessEqual(shares * 105, 10000)
+        self.assertEqual(_fill_shares(dict(plan, shares=1, planned_loss=6), trade, 100000), 0)
+
+    def test_gap_size_preserves_exposure_and_available_cash(self):
+        plan = dict(PLAN, shares=100, planned_loss=10000, position_value=10000)
+        trade = {"fill": 105, "round_trip_cost_per_share": 0}
+        self.assertEqual(_fill_shares(plan, trade, 100000), 95)
+        self.assertEqual(_fill_shares(plan, trade, 1000), 9)
+        self.assertEqual(_fill_shares(plan, trade, 10), 0)
+
+    def test_gap_size_never_increases_original_order_quantity(self):
+        plan = dict(PLAN, shares=10, planned_loss=10000, position_value=100000)
+        self.assertEqual(_fill_shares(plan, {"fill": 100, "round_trip_cost_per_share": 0}, 100000), 10)
 
     def test_partial_exit_books_cash_and_marks_only_remaining_shares(self):
         days = ["2026-01-01", "2026-01-02", "2026-01-03"]

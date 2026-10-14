@@ -109,7 +109,7 @@ class ModelScanTests(unittest.TestCase):
         card = copy.deepcopy(self.card)
         rates = {name: 0.5 for name in SETUPS}
         card["model"].update(status="PROVEN", brier_skill=0.02, auc=0.6, base_rates=rates)
-        card["jev"] = {"status": "PROVEN", "question_bank_version": "2", "model_requested": "jev-test",
+        card["jev"] = {"status": "PROVEN", "proof_version": 2, "question_bank_version": "2", "model_requested": "jev-test",
                        "brier_skill": 0.08, "auc": 0.65, "base_rates": rates}
         report = scan(self.db, self.day, scorecard=card, jev_client=Jev())
         self.assertEqual(report["meta"]["chosen"], "JEV")

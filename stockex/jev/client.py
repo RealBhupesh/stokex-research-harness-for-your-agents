@@ -177,12 +177,28 @@ class JevClient:
         sleeper: Callable[[float], None] = time.sleep,
     ):
         self.api_key = api_key if api_key is not None else os.environ.get(API_KEY_ENV)
-        if not self.api_key:
+        if self.api_key is None or self.api_key == "":
             raise JevConfigError("JEV_CONFIG_MISSING", f"Set {API_KEY_ENV} to call Jev")
-        endpoint = urlsplit(base_url)
-        if endpoint.scheme != "https" or not endpoint.hostname or endpoint.username or endpoint.password:
+        if not isinstance(self.api_key, str) or any(not 33 <= ord(char) <= 126 for char in self.api_key):
+            raise JevConfigError("JEV_CONFIG_INVALID", "Jev API key must be a non-empty ASCII token without whitespace")
+        try:
+            if not isinstance(base_url, str) or any(not 33 <= ord(char) <= 126 for char in base_url):
+                raise ValueError("invalid endpoint characters")
+            endpoint = urlsplit(base_url)
+            valid_endpoint = (endpoint.scheme == "https" and bool(endpoint.hostname)
+                              and endpoint.username is None and endpoint.password is None)
+            # Force validation of malformed or out-of-range port declarations.
+            endpoint.port
+        except (ValueError, TypeError):
+            valid_endpoint = False
+        if not valid_endpoint:
             raise JevConfigError("JEV_CONFIG_INVALID", "Jev endpoint must be HTTPS without embedded credentials")
-        if not math.isfinite(timeout) or timeout <= 0:
+        try:
+            valid_timeout = (not isinstance(timeout, bool) and isinstance(timeout, (int, float))
+                             and math.isfinite(timeout) and timeout > 0)
+        except OverflowError:
+            valid_timeout = False
+        if not valid_timeout:
             raise JevConfigError("JEV_CONFIG_INVALID", "Jev timeout must be finite and positive")
         self.model, self.base_url, self.timeout = model, base_url, timeout
         self._transport = transport or _urllib_transport
@@ -204,8 +220,8 @@ class JevClient:
             raise JevRequestError("JEV_HTTP_ERROR", f"Jev returned HTTP {status}")
         try:
             response = json.loads(raw)
-        except (ValueError, UnicodeDecodeError) as error:
-            raise JevResponseError("JEV_RESPONSE_INVALID", f"Response is not JSON: {error}") from error
+        except (ValueError, UnicodeDecodeError):
+            raise JevResponseError("JEV_RESPONSE_INVALID", "Jev response is not valid JSON") from None
         answers = response.get("answers") if isinstance(response, dict) else None
         if not isinstance(answers, dict):
             raise JevResponseError("JEV_RESPONSE_INVALID", "Response has no answers object")
@@ -224,10 +240,16 @@ class JevClient:
                 self._sleeper(0.25)
             try:
                 status, raw = self._transport(self.base_url, headers, body, self.timeout)
-            except OSError as error:
+            except OSError:
                 if attempt:
-                    raise JevRequestError("JEV_HTTP_ERROR", "Jev request failed after retry") from error
+                    raise JevRequestError("JEV_HTTP_ERROR", "Jev request failed after retry") from None
                 continue
+            except JevError:
+                raise
+            except Exception:
+                # urllib and injected transports may include Authorization values
+                # in header/encoding errors. Never expose their text or traceback.
+                raise JevRequestError("JEV_HTTP_ERROR", "Jev transport failed") from None
             if status not in _RETRY_STATUSES or attempt:
                 return status, raw
         raise AssertionError("unreachable")

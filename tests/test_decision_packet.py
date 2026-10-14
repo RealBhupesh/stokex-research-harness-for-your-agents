@@ -144,6 +144,52 @@ class DecisionPacketValidationTests(unittest.TestCase):
         result = validate_packet(packet)
         self.assertIn("APPROVAL_STATUS_CONFLICT", [error["code"] for error in result["errors"]])
 
+    def test_unknown_states_and_malformed_safety_lists_fail_closed(self):
+        mutations = [
+            ("decision", "ic_action", "BUY_NOW"),
+            ("decision", "research_status", "APPROVED"),
+            ("decision", "ic_action", []),
+            ("mandate", "mode", {}),
+            ("risks", "hard_stops", "none"),
+            ("risks", "hard_stops", [True]),
+        ]
+        for container, key, value in mutations:
+            with self.subTest(container=container, key=key, value=value):
+                packet = valid_packet()
+                packet[container][key] = value
+                self.assertFalse(validate_packet(packet)["valid"])
+        for field, value in (("contradictions", [None]), ("legal_credit", {"issues": "none"}),
+                             ("contradictions", [{"id": "C1", "status": "RESOLVED", "controlling": "false"}])):
+            packet = valid_packet()
+            packet[field] = value
+            self.assertFalse(validate_packet(packet)["valid"])
+
+    def test_resolution_requires_known_evidence_and_source_ids_are_unique(self):
+        packet = valid_packet()
+        packet["risks"]["hard_stops"] = [{"id": "R1", "status": "RESOLVED"}]
+        self.assertIn("SAFETY_EVIDENCE_INVALID", [error["code"] for error in validate_packet(packet)["errors"]])
+        packet["risks"]["hard_stops"][0]["resolution_source_ids"] = ["unknown"]
+        self.assertFalse(validate_packet(packet)["valid"])
+        packet["risks"]["hard_stops"][0]["resolution_source_ids"] = ["S1"]
+        self.assertTrue(validate_packet(packet)["valid"])
+        packet["sources"].append(copy.deepcopy(packet["sources"][0]))
+        self.assertIn("DUPLICATE_SOURCE_ID", [error["code"] for error in validate_packet(packet)["errors"]])
+
+    def test_nonfinite_trade_prices_and_null_sizing_inputs_are_rejected(self):
+        for invalid in (float("nan"), float("inf"), 10 ** 500):
+            packet = valid_packet()
+            packet["mandate"]["mode"] = "AGGRESSIVE_SHORT_TERM"
+            packet["trade_plan"] = {"entry": 100, "stop": 90, "target": invalid,
+                                    "time_stop_sessions": 5, "position_size_rupees": 1000,
+                                    "liquidity_passed": True}
+            self.assertFalse(validate_packet(packet)["valid"])
+        packet = valid_packet()
+        packet["mandate"]["personalized_sizing"] = True
+        packet["portfolio_inputs"] = {"portfolio_value": None, "holdings": None,
+                                      "max_loss_fraction": None, "liquidity_limit": None}
+        self.assertFalse(validate_packet(packet)["valid"])
+
+
 
 if __name__ == "__main__":
     unittest.main()

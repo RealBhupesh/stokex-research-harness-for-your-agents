@@ -10,13 +10,20 @@ import sqlite3
 
 from .corporate import adjustment_events, apply_adjustments
 from .importers import DEFAULT_AVAILABLE_TIME_UTC
+from ..store.records import normalize_timestamp
 
 
 SERIES_PREFERENCE = ("EQ", "BE", "BZ", "SM", "ST")
 
 
-def cutoff(as_of: str) -> str:
-    return f"{as_of}T{DEFAULT_AVAILABLE_TIME_UTC}Z"
+def cutoff(as_of: str, known_at: str | None = None) -> str:
+    default = f"{as_of}T{DEFAULT_AVAILABLE_TIME_UTC}Z"
+    if known_at is None:
+        return default
+    normalized = normalize_timestamp(known_at, "known_at")
+    if normalized < default:
+        raise ValueError("Research cutoff cannot precede the requested session's end-of-day cutoff")
+    return normalized
 
 
 @dataclass
@@ -72,6 +79,7 @@ def load_histories(
     start: str | None = None,
     symbols: list[str] | None = None,
     adjust: bool = True,
+    known_at: str | None = None,
 ) -> dict[str, PriceSeries]:
     """Load every symbol's bars up to ``as_of``, one bar per date.
 
@@ -79,7 +87,7 @@ def load_histories(
     consolidation ex-date on or before ``as_of`` are back-adjusted.
     """
     clauses = ["trade_date <= ?", "available_at <= ?"]
-    params: list = [as_of, cutoff(as_of)]
+    params: list = [as_of, cutoff(as_of, known_at)]
     if start is not None:
         clauses.append("trade_date >= ?")
         params.append(start)
@@ -105,7 +113,7 @@ def load_histories(
         explicit: dict[str, list] = {}
         for row in connection.execute(
             "SELECT symbol, ex_date, kind, factor FROM corporate_actions WHERE ex_date <= ? AND available_at <= ? ORDER BY ex_date",
-            (as_of, cutoff(as_of)),
+            (as_of, cutoff(as_of, known_at)),
         ):
             explicit.setdefault(row["symbol"], []).append(
                 {"ex_date": row["ex_date"], "kind": row["kind"], "factor": row["factor"]}
@@ -116,17 +124,17 @@ def load_histories(
 
 
 def load_history(connection, symbol: str, as_of: str, *, start: str | None = None,
-                 adjust: bool = True) -> PriceSeries:
-    return load_histories(connection, as_of, start=start, symbols=[symbol], adjust=adjust).get(
+                 adjust: bool = True, known_at: str | None = None) -> PriceSeries:
+    return load_histories(connection, as_of, start=start, symbols=[symbol], adjust=adjust, known_at=known_at).get(
         symbol.upper(), PriceSeries(symbol.upper())
     )
 
 
-def index_closes(connection, index_name: str, as_of: str) -> dict[str, float]:
+def index_closes(connection, index_name: str, as_of: str, *, known_at: str | None = None) -> dict[str, float]:
     rows = connection.execute(
         "SELECT trade_date, close FROM index_bars WHERE index_name = ? AND trade_date <= ? "
         "AND available_at <= ? ORDER BY trade_date",
-        (index_name.upper(), as_of, cutoff(as_of)),
+        (index_name.upper(), as_of, cutoff(as_of, known_at)),
     ).fetchall()
     return {row["trade_date"]: row["close"] for row in rows}
 
@@ -143,10 +151,11 @@ def trading_dates(connection, start: str, end: str) -> list[str]:
     return [row[0] for row in rows]
 
 
-def futures_history(connection, as_of: str, *, symbols: list[str] | None = None, start: str | None = None) -> dict:
+def futures_history(connection, as_of: str, *, symbols: list[str] | None = None, start: str | None = None,
+                    known_at: str | None = None) -> dict:
     """Per symbol and date: near-month future price, near-month OI and total futures OI."""
     clauses = ["instrument = 'FUT'", "trade_date <= ?", "available_at <= ?", "expiry >= trade_date"]
-    params: list = [as_of, cutoff(as_of)]
+    params: list = [as_of, cutoff(as_of, known_at)]
     if start is not None:
         clauses.append("trade_date >= ?")
         params.append(start)
@@ -177,12 +186,12 @@ def futures_history(connection, as_of: str, *, symbols: list[str] | None = None,
     return result
 
 
-def option_chain(connection, symbol: str, trade_date: str) -> list[dict]:
+def option_chain(connection, symbol: str, trade_date: str, *, known_at: str | None = None) -> list[dict]:
     """Nearest-expiry option rows for one symbol on one date."""
     expiry = connection.execute(
         "SELECT MIN(expiry) FROM fo_bars WHERE symbol = ? AND trade_date = ? AND instrument IN ('CE', 'PE') "
         "AND expiry >= trade_date AND available_at <= ?",
-        (symbol.upper(), trade_date, cutoff(trade_date)),
+        (symbol.upper(), trade_date, cutoff(trade_date, known_at)),
     ).fetchone()[0]
     if expiry is None:
         return []
@@ -190,13 +199,14 @@ def option_chain(connection, symbol: str, trade_date: str) -> list[dict]:
         "SELECT instrument, expiry, strike, settle, close, open_interest, underlying FROM fo_bars "
         "WHERE symbol = ? AND trade_date = ? AND expiry = ? AND instrument IN ('CE', 'PE') "
         "AND available_at <= ? ORDER BY strike",
-        (symbol.upper(), trade_date, expiry, cutoff(trade_date)),
+        (symbol.upper(), trade_date, expiry, cutoff(trade_date, known_at)),
     ).fetchall()
     return [dict(row) for row in rows]
 
 
-def deals_between(connection, start: str, end: str, *, symbol: str | None = None) -> list[dict]:
-    params: list = [start, end, cutoff(end)]
+def deals_between(connection, start: str, end: str, *, symbol: str | None = None,
+                  known_at: str | None = None) -> list[dict]:
+    params: list = [start, end, cutoff(end, known_at)]
     clause = ""
     if symbol:
         clause = " AND symbol = ?"
@@ -209,12 +219,13 @@ def deals_between(connection, start: str, end: str, *, symbol: str | None = None
     return [dict(row) for row in rows]
 
 
-def restrictions_on(connection, trade_date: str, *, through: str | None = None) -> dict[str, list[str]]:
+def restrictions_on(connection, trade_date: str, *, through: str | None = None,
+                    known_at: str | None = None) -> dict[str, list[str]]:
     """Lists active on ``trade_date``, plus any starting by ``through`` (e.g. tomorrow's ban list)."""
     rows = connection.execute(
         "SELECT symbol, list_name, stage FROM restrictions WHERE from_date <= ? "
         "AND (to_date IS NULL OR to_date >= ?) AND available_at <= ? ORDER BY symbol, list_name",
-        (through or trade_date, trade_date, cutoff(trade_date)),
+        (through or trade_date, trade_date, cutoff(trade_date, known_at)),
     ).fetchall()
     result: dict[str, list[str]] = {}
     for row in rows:

@@ -19,6 +19,9 @@ from .jev.triage import DEFAULT_CONFIDENCE_FLOOR, triage_packet
 from .market.importers import KINDS, MarketImportError, import_market_batch, parse_date
 from .market.health import market_health
 from .operations import atomic_json, backup_database
+from .providers import ProviderError, sync_upstox
+from .providers.upstox import strict_json
+from .research_run import run_research, verify_research_bundle
 from .market.queries import coverage
 from .market.schema import open_market_db
 from .signals.scan import scan, to_markdown
@@ -75,6 +78,20 @@ def _parser() -> argparse.ArgumentParser:
     health.add_argument("--as-of", required=True)
     health.add_argument("--min-symbols", type=int, default=1)
     health.add_argument("--min-history", type=int, default=60)
+    health.add_argument("--cutoff", help="knowledge timestamp, if research occurs after the session's EOD cutoff")
+
+    research = commands.add_parser("research-synthesize", help="validate supplied specialist reviews and freeze an auditable bundle")
+    research.add_argument("input", type=Path)
+    research.add_argument("--out", required=True, type=Path)
+    verify = commands.add_parser("research-verify", help="verify hashes and replay a research bundle")
+    verify.add_argument("directory", type=Path)
+
+    provider = commands.add_parser("provider-sync", help="read-only Upstox V3 daily candles with raw provenance")
+    provider.add_argument("database", type=Path)
+    provider.add_argument("manifest", type=Path, help="explicit symbol/ISIN and index instrument mappings")
+    provider.add_argument("--from", dest="start", required=True)
+    provider.add_argument("--to", dest="end", required=True)
+    provider.add_argument("--raw-dir", required=True, type=Path)
 
     jev = commands.add_parser("jev-triage", help="advisory Jev triage of a cutoff evidence packet")
     jev.add_argument("database", type=Path)
@@ -114,6 +131,7 @@ def _parser() -> argparse.ArgumentParser:
                          help="record the ranked picks in the forward-test journal")
     scanner.add_argument("--strict-data", action="store_true", help="block scans that fail market-health")
     scanner.add_argument("--min-symbols", type=int, default=1)
+    scanner.add_argument("--cutoff", help="explicit knowledge timestamp for delayed data; separate from the price session")
 
     journal_update = commands.add_parser("journal-update", help="evaluate journal picks with newer data")
     journal_update.add_argument("database", type=Path)
@@ -224,6 +242,10 @@ def _error_payload(code: str, message: str, **details: object) -> dict:
 
 
 def _run(args: argparse.Namespace) -> object:
+    if args.command == "research-synthesize":
+        return run_research(args.input, args.out)
+    if args.command == "research-verify":
+        return verify_research_bundle(args.directory)
     if args.command == "backup":
         return backup_database(args.database, args.destination)
     if args.command == "init":
@@ -237,7 +259,7 @@ def _run(args: argparse.Namespace) -> object:
         with PointInTimeStore.open(args.database) as store:
             return import_jsonl(store, args.source)
 
-    if args.command in {"market-import", "market-status", "market-health", "scan", "backtest", "announcements-classify",
+    if args.command in {"market-import", "provider-sync", "market-status", "market-health", "scan", "backtest", "announcements-classify",
                         "journal-update", "journal-report"}:
         return _run_market(args)
 
@@ -261,10 +283,14 @@ def _run(args: argparse.Namespace) -> object:
 
 
 def _run_market(args: argparse.Namespace) -> object:
-    if args.command != "market-import" and not args.database.is_file():
+    if args.command not in {"market-import", "provider-sync"} and not args.database.is_file():
         raise ValueError(f"Database does not exist: {args.database}")
     connection = open_market_db(args.database)
     try:
+        if args.command == "provider-sync":
+            manifest = strict_json(args.manifest.read_bytes())
+            return sync_upstox(connection, manifest, _check_date(args.start, "--from"),
+                               _check_date(args.end, "--to"), args.raw_dir)
         if args.command == "market-import":
             return import_market_batch(connection, args.files, kind=args.kind,
                                    option_expiries={"none": 0, "near": 1, "near2": 2, "all": None}[args.options],
@@ -273,7 +299,7 @@ def _run_market(args: argparse.Namespace) -> object:
             return coverage(connection)
         if args.command == "market-health":
             return market_health(connection, _check_date(args.as_of, "--as-of"),
-                                 min_symbols=args.min_symbols, min_history=args.min_history)
+                                 min_symbols=args.min_symbols, min_history=args.min_history, known_at=args.cutoff)
         if args.command == "journal-update":
             return journal.update_outcomes(connection, _check_date(args.as_of, "--as-of"))
         if args.command == "journal-report":
@@ -288,7 +314,7 @@ def _run_market(args: argparse.Namespace) -> object:
             as_of = _check_date(args.as_of, "--as-of")
             if args.top < 1:
                 raise ValueError("--top must be positive")
-            health = market_health(connection, as_of, min_symbols=args.min_symbols, min_history=61) \
+            health = market_health(connection, as_of, min_symbols=args.min_symbols, min_history=61, known_at=args.cutoff) \
                 if args.strict_data else None
             if health and health["status"] == "BLOCKED":
                 return {"as_of": as_of, "status": "BLOCKED", "data_health": health,
@@ -297,7 +323,7 @@ def _run_market(args: argparse.Namespace) -> object:
             report = scan(connection, as_of, setups=args.setups, risk_params=_risk_params(args),
                           scorecard=scorecard, events=events, top=args.top,
                           jev_client=jev_client, jev_cache=jev_cache,
-                          live=journal.live_records(connection))
+                          live=journal.live_records(connection), known_at=args.cutoff)
             if args.journal:
                 report["journal_recorded"] = journal.record_scan(connection, report)
             if health:
@@ -342,6 +368,8 @@ def main(argv: list[str] | None = None) -> int:
     except MarketImportError as error:
         print(_json_output(asdict(error)), file=sys.stderr)
     except JevError as error:
+        print(_json_output(_error_payload(error.code, error.message)), file=sys.stderr)
+    except ProviderError as error:
         print(_json_output(_error_payload(error.code, error.message)), file=sys.stderr)
     except StoreValidationError as error:
         print(_json_output(_error_payload(error.code, error.message, path=error.path)), file=sys.stderr)

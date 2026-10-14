@@ -2,6 +2,7 @@ import json
 import os
 import unittest
 import io
+import traceback
 from unittest import mock
 
 from stockex.jev.client import (
@@ -52,6 +53,52 @@ class JevClientTests(unittest.TestCase):
                        {"timeout": float("nan")}, {"timeout": 0}):
             with self.subTest(kwargs=kwargs), self.assertRaises(JevConfigError):
                 JevClient("key", **kwargs)
+
+    def test_api_key_rejects_header_injection_and_nonstring_values(self):
+        invalid = [True, 1, b"key", [], {}, "secret\r\nInjected: header", "secret\n", "key\tvalue",
+                   " key", "key ", "key\x00value", "key\x7fvalue", "clé"]
+        for key in invalid:
+            with self.subTest(key_type=type(key).__name__):
+                with self.assertRaises(JevConfigError) as caught:
+                    JevClient(key)
+                self.assertEqual(caught.exception.code, "JEV_CONFIG_INVALID")
+                self.assertNotIn("secret", str(caught.exception))
+        self.assertEqual(JevClient("token.a_b-c+/=").api_key, "token.a_b-c+/=")
+
+    def test_endpoint_rejects_normalized_controls_empty_userinfo_and_bad_ports(self):
+        invalid = [None, 1, b"https://example.com", "https://@example.com",
+                   "https://:password@example.com", "https://example.com\n/private",
+                   " https://example.com", "https://exam\tple.com", "https://example.com:bad",
+                   "https://example.com:65536", "https://[invalid", "https://example.com/\x7f"]
+        for endpoint in invalid:
+            with self.subTest(endpoint_type=type(endpoint).__name__), self.assertRaises(JevConfigError):
+                JevClient("key", base_url=endpoint)
+
+    def test_timeout_requires_finite_positive_numeric_value(self):
+        for timeout in (None, True, False, "30", [], float("inf"), float("nan"), 10 ** 1000, -1, 0):
+            with self.subTest(timeout=timeout), self.assertRaises(JevConfigError):
+                JevClient("key", timeout=timeout)
+        self.assertEqual(JevClient("key", timeout=0.25).timeout, 0.25)
+
+    def test_transport_exceptions_never_echo_credentials_in_formatted_traceback(self):
+        for failure in (ValueError("invalid header: Bearer secret-token"),
+                        TypeError("secret-token"), RuntimeError("secret-token"),
+                        OSError("request failed: secret-token")):
+            transport = FakeTransport(failure, failure)
+            credential = "secret-token"
+            try:
+                JevClient(credential, transport=transport, sleeper=lambda delay: None).evaluate("s", QUESTIONS)
+            except JevRequestError as error:
+                self.assertEqual(error.code, "JEV_HTTP_ERROR")
+                self.assertNotIn("secret-token", traceback.format_exc())
+            else:
+                self.fail("Expected a sanitized transport error")
+            self.assertEqual(len(transport.calls), 2 if isinstance(failure, OSError) else 1)
+
+    def test_invalid_response_does_not_echo_response_bytes(self):
+        with self.assertRaises(JevResponseError) as caught:
+            JevClient("key", transport=FakeTransport((200, b'"secret-token\xff"'))).evaluate("s", QUESTIONS)
+        self.assertNotIn("secret-token", str(caught.exception))
 
     def test_http_errors_do_not_echo_provider_secrets(self):
         with self.assertRaises(JevRequestError) as caught:

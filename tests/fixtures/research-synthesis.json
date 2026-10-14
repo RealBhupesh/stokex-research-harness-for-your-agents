@@ -1,0 +1,215 @@
+{
+  "synthetic_example": true,
+  "evidence_packet": {
+    "contract_version": "stockex.research.v1",
+    "controlling_evidence": [],
+    "decision_context": {},
+    "mandate": {
+      "horizon": "5 years",
+      "mode": "LONG_TERM_COMPOUNDING",
+      "personalized_sizing": false
+    },
+    "metadata": {
+      "exchange": "NSE",
+      "issuer": "Example Limited",
+      "research_cutoff": "2026-09-13T15:30:00+05:30",
+      "symbol": "EXAMPLE"
+    },
+    "observations": [
+      {
+        "available_at": "2026-09-12T18:00:00+05:30",
+        "field": "revenue",
+        "id": "O1",
+        "quality_status": "VERIFIED",
+        "source_id": "S1",
+        "value": 100
+      }
+    ],
+    "sources": [
+      {
+        "available_at": "2026-09-12T18:00:00+05:30",
+        "id": "S1",
+        "published_at": "2026-09-12T18:00:00+05:30",
+        "publisher": "NSE",
+        "source_class": "EXCHANGE",
+        "url": "https://www.nseindia.com/example"
+      }
+    ],
+    "evidence_digest": "0ca12693806f2fca228cece1fa422b7bea633078a27fe48bd4045414303763f8"
+  },
+  "reports": [
+    {
+      "id": "fundamentals",
+      "role": "fundamentals",
+      "reviewer_id": "fundamentals-analyst",
+      "evidence_digest": "0ca12693806f2fca228cece1fa422b7bea633078a27fe48bd4045414303763f8",
+      "status": "COMPLETE",
+      "conclusion": "Supplied fixture conclusion",
+      "findings": [
+        {
+          "id": "F1",
+          "assessment": "SUPPORTS",
+          "rationale": "Fixture evidence supports this test finding",
+          "source_ids": [
+            "S1"
+          ],
+          "observation_ids": [
+            "O1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "valuation",
+      "role": "valuation",
+      "reviewer_id": "valuation-analyst",
+      "evidence_digest": "0ca12693806f2fca228cece1fa422b7bea633078a27fe48bd4045414303763f8",
+      "status": "COMPLETE",
+      "conclusion": "Supplied fixture conclusion",
+      "findings": [
+        {
+          "id": "F1",
+          "assessment": "SUPPORTS",
+          "rationale": "Fixture evidence supports this test finding",
+          "source_ids": [
+            "S1"
+          ],
+          "observation_ids": [
+            "O1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "market",
+      "role": "market",
+      "reviewer_id": "market-analyst",
+      "evidence_digest": "0ca12693806f2fca228cece1fa422b7bea633078a27fe48bd4045414303763f8",
+      "status": "COMPLETE",
+      "conclusion": "Supplied fixture conclusion",
+      "findings": [
+        {
+          "id": "F1",
+          "assessment": "SUPPORTS",
+          "rationale": "Fixture evidence supports this test finding",
+          "source_ids": [
+            "S1"
+          ],
+          "observation_ids": [
+            "O1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "risk",
+      "role": "risk",
+      "reviewer_id": "risk-analyst",
+      "evidence_digest": "0ca12693806f2fca228cece1fa422b7bea633078a27fe48bd4045414303763f8",
+      "status": "COMPLETE",
+      "conclusion": "Supplied fixture conclusion",
+      "findings": [
+        {
+          "id": "F1",
+          "assessment": "SUPPORTS",
+          "rationale": "Fixture evidence supports this test finding",
+          "source_ids": [
+            "S1"
+          ],
+          "observation_ids": [
+            "O1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "legal_credit",
+      "role": "legal_credit",
+      "reviewer_id": "legal_credit-analyst",
+      "evidence_digest": "0ca12693806f2fca228cece1fa422b7bea633078a27fe48bd4045414303763f8",
+      "status": "COMPLETE",
+      "conclusion": "Supplied fixture conclusion",
+      "findings": [
+        {
+          "id": "F1",
+          "assessment": "SUPPORTS",
+          "rationale": "Fixture evidence supports this test finding",
+          "source_ids": [
+            "S1"
+          ],
+          "observation_ids": [
+            "O1"
+          ]
+        }
+      ]
+    }
+  ],
+  "skeptical_review": {
+    "id": "skeptic-report",
+    "reviewer_id": "independent-skeptic",
+    "evidence_digest": "0ca12693806f2fca228cece1fa422b7bea633078a27fe48bd4045414303763f8",
+    "status": "COMPLETE",
+    "reviews": [
+      {
+        "report_id": "fundamentals",
+        "finding_id": "F1",
+        "verdict": "ACCEPT",
+        "rationale": "Fixture finding checked against supplied observation",
+        "source_ids": [
+          "S1"
+        ],
+        "observation_ids": [
+          "O1"
+        ]
+      },
+      {
+        "report_id": "valuation",
+        "finding_id": "F1",
+        "verdict": "ACCEPT",
+        "rationale": "Fixture finding checked against supplied observation",
+        "source_ids": [
+          "S1"
+        ],
+        "observation_ids": [
+          "O1"
+        ]
+      },
+      {
+        "report_id": "market",
+        "finding_id": "F1",
+        "verdict": "ACCEPT",
+        "rationale": "Fixture finding checked against supplied observation",
+        "source_ids": [
+          "S1"
+        ],
+        "observation_ids": [
+          "O1"
+        ]
+      },
+      {
+        "report_id": "risk",
+        "finding_id": "F1",
+        "verdict": "ACCEPT",
+        "rationale": "Fixture finding checked against supplied observation",
+        "source_ids": [
+          "S1"
+        ],
+        "observation_ids": [
+          "O1"
+        ]
+      },
+      {
+        "report_id": "legal_credit",
+        "finding_id": "F1",
+        "verdict": "ACCEPT",
+        "rationale": "Fixture finding checked against supplied observation",
+        "source_ids": [
+          "S1"
+        ],
+        "observation_ids": [
+          "O1"
+        ]
+      }
+    ]
+  }
+}

@@ -133,6 +133,24 @@ their actual dates. Unresolved outcomes are excluded from performance proof and
 training. Setup proof requires enough distinct sessions and disjoint day folds;
 schema-3 scorecards invalidate the earlier statistical contract.
 
+Judge and model calibration use proof contract 2: causal setup baselines, at
+least 20 distinct sessions, four temporal folds, and clustered confidence bounds
+for calibration, ranking and filtering uplift. Scanner gates reject older proof
+contracts. Journal origin metadata separates timely forward records from
+retrospective replay and legacy records; replay remains inspectable but cannot
+contribute to forward results. Split-adjusted outcomes identify their price units
+and retain replay and simulated execution-session prices separately.
+
+Gap entries at or above the original first target are cancelled. Lower gap fills
+reduce shares to preserve the frozen loss budget, exposure limit and cash; a
+backtest cannot retain the original quantity after a larger fill-stop distance.
+
+The optional [Upstox adapter](upstox-data.md) and
+[agent research synthesis](agent-research.md) have separate input and provenance
+contracts. The provider adapter remains experimental until its adjustment basis
+and live entitlement are validated; the research gate validates supplied reports
+without generating analyst work or authenticating reviewer identities.
+
 ## Back up and restore
 
 Use different files for the market database and point-in-time evidence store.

@@ -3,6 +3,7 @@
 import argparse
 from datetime import datetime
 import json
+import math
 
 
 APPROVAL_ACTIONS = {"APPROVE_FOR_CONSIDERATION", "APPROVE_WITH_CONDITIONS"}
@@ -33,6 +34,74 @@ def _timestamp(value, path, errors):
     return parsed
 
 
+MANDATE_MODES = {"CAPITAL_PRESERVATION", "LONG_TERM_COMPOUNDING", "TACTICAL_SWING", "EVENT_DRIVEN", "ASYMMETRIC_SPECULATION", "AGGRESSIVE_SHORT_TERM"}
+RESEARCH_STATUSES = {"RESEARCH_CANDIDATE", "SPECULATIVE_RESEARCH_CANDIDATE", "WATCH", "REJECT", "SCREEN_ONLY", "INSUFFICIENT_DATA"}
+IC_ACTIONS = APPROVAL_ACTIONS | {"RETURN_FOR_WORK", "VETO"}
+
+
+def _positive_number(value):
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value) and value > 0
+    except OverflowError:
+        return False
+
+
+def _structure_errors(packet):
+    """Reject malformed safety containers before evaluating their contents."""
+    errors = []
+    def bad(path, message):
+        _error(errors, "STRUCTURE_INVALID", path, message)
+    def text(value):
+        return isinstance(value, str) and bool(value.strip())
+    for field in ("metadata", "mandate", "gates", "risks", "decision"):
+        if not isinstance(packet.get(field), dict):
+            bad(field, "Required object is missing or malformed")
+    if errors:
+        return errors
+    metadata, mandate, decision = packet["metadata"], packet["mandate"], packet["decision"]
+    for field in ("issuer", "symbol"):
+        if not text(metadata.get(field)):
+            bad("metadata." + field, "Nonempty string required")
+    if metadata.get("exchange") not in ("NSE", "BSE"):
+        bad("metadata.exchange", "Exchange must be NSE or BSE")
+    if not isinstance(mandate.get("mode"), str) or mandate["mode"] not in MANDATE_MODES:
+        bad("mandate.mode", "Unknown mandate mode")
+    if not text(mandate.get("horizon")) or type(mandate.get("personalized_sizing")) is not bool:
+        bad("mandate", "Horizon and boolean personalized_sizing are required")
+    for field, choices in (("research_status", RESEARCH_STATUSES), ("ic_action", IC_ACTIONS)):
+        if not isinstance(decision.get(field), str) or decision[field] not in choices:
+            bad("decision." + field, "Unknown or missing decision state")
+    containers = [("risks.hard_stops", packet["risks"].get("hard_stops"), "risk"),
+                  ("contradictions", packet.get("contradictions"), "contradiction")]
+    if "legal_credit" in packet:
+        legal = packet["legal_credit"]
+        containers.append(("legal_credit.issues", legal.get("issues") if isinstance(legal, dict) else None, "legal"))
+    for path, items, kind in containers:
+        if not isinstance(items, list):
+            bad(path, "Safety records must be an array")
+            continue
+        ids = set()
+        for index, item in enumerate(items):
+            item_path = f"{path}[{index}]"
+            if not isinstance(item, dict):
+                bad(item_path, "Safety record must be an object")
+                continue
+            identifier = item.get("id")
+            if not text(identifier) or identifier in ids:
+                bad(item_path + ".id", "Unique nonempty identifier required")
+            else:
+                ids.add(identifier)
+            if item.get("status") not in ("OPEN", "RESOLVED"):
+                bad(item_path + ".status", "Status must be OPEN or RESOLVED")
+            if kind == "contradiction" and type(item.get("controlling")) is not bool:
+                bad(item_path + ".controlling", "Boolean controlling flag required")
+            if kind == "legal" and item.get("severity") not in ("LOW", "MODERATE", "MATERIAL", "BLOCKER"):
+                bad(item_path + ".severity", "Known severity required")
+    return errors
+
+
 def validate_packet(packet):
     """Return deterministic structural and gate errors for a research decision packet."""
     errors = []
@@ -45,6 +114,12 @@ def validate_packet(packet):
             "gate_summary": {"required": sorted(REQUIRED_APPROVAL_GATES), "failed": [], "missing": [], "all_required_passed": False},
         }
 
+    structural_errors = _structure_errors(packet)
+    if structural_errors:
+        return {"valid": False, "errors": structural_errors, "warnings": [],
+                "gate_summary": {"required": sorted(REQUIRED_APPROVAL_GATES), "failed": [],
+                                 "missing": [], "all_required_passed": False}}
+
     metadata = packet.get("metadata") if isinstance(packet.get("metadata"), dict) else {}
     cutoff = _timestamp(metadata.get("research_cutoff"), "metadata.research_cutoff", errors)
 
@@ -53,12 +128,19 @@ def validate_packet(packet):
         _error(errors, "SOURCE_LEDGER_MISSING", "sources", "At least one sourced record is required")
         sources = []
     provenance_fields = ("id", "publisher", "url", "source_class", "published_at", "available_at")
+    source_ids = set()
     for index, source in enumerate(sources):
         path = f"sources[{index}]"
         if not isinstance(source, dict):
             _error(errors, "SOURCE_INVALID", path, "Source must be an object")
             continue
-        missing = [field for field in provenance_fields if not source.get(field)]
+        missing = [field for field in provenance_fields
+                   if not isinstance(source.get(field), str) or not source[field].strip()]
+        identifier = source.get("id")
+        if isinstance(identifier, str):
+            if identifier in source_ids:
+                _error(errors, "DUPLICATE_SOURCE_ID", path + ".id", "Source IDs must be unique")
+            source_ids.add(identifier)
         if missing:
             _error(errors, "SOURCE_PROVENANCE_MISSING", path, f"Missing fields: {', '.join(missing)}")
         published = _timestamp(source.get("published_at"), f"{path}.published_at", errors)
@@ -123,7 +205,12 @@ def validate_packet(packet):
     if mandate.get("personalized_sizing") is True:
         portfolio = packet.get("portfolio_inputs") if isinstance(packet.get("portfolio_inputs"), dict) else {}
         required_inputs = ("portfolio_value", "holdings", "max_loss_fraction", "liquidity_limit")
-        if any(name not in portfolio for name in required_inputs):
+        if (any(name not in portfolio for name in required_inputs)
+                or not _positive_number(portfolio.get("portfolio_value"))
+                or not isinstance(portfolio.get("holdings"), list)
+                or not _positive_number(portfolio.get("max_loss_fraction"))
+                or portfolio.get("max_loss_fraction", 2) > 1
+                or not _positive_number(portfolio.get("liquidity_limit"))):
             _error(errors, "SIZING_INPUTS_MISSING", "portfolio_inputs", "Personalized sizing requires portfolio value, holdings, loss limit and liquidity limit")
 
     if approving and mandate.get("mode") == "ASYMMETRIC_SPECULATION":
@@ -138,9 +225,7 @@ def validate_packet(packet):
         )
         missing_controls = [name for name in required_controls if name not in controls]
         invalid_controls = (
-            not isinstance(controls.get("max_capital_at_risk"), (int, float))
-            or isinstance(controls.get("max_capital_at_risk"), bool)
-            or controls.get("max_capital_at_risk", 0) <= 0
+            not _positive_number(controls.get("max_capital_at_risk"))
             or controls.get("total_loss_accepted") is not True
             or controls.get("liquidity_passed") is not True
             or any(not isinstance(controls.get(name), str) or not controls[name].strip()
@@ -159,7 +244,7 @@ def validate_packet(packet):
 
         def positive(name):
             value = plan.get(name)
-            return isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0
+            return _positive_number(value)
 
         prices_valid = all(positive(name) for name in ("entry", "stop", "target")) and (
             plan["stop"] < plan["entry"] < plan["target"]
@@ -178,9 +263,18 @@ def validate_packet(packet):
                 "Aggressive short-term approval requires entry, stop below entry, target above entry, a 1-20 session time stop, a position size and passed liquidity",
             )
 
+    for path, records in (("risks.hard_stops", hard_stops), ("contradictions", contradictions), ("legal_credit.issues", legal_issues)):
+        for index, record in enumerate(records):
+            for key in ("source_ids", "resolution_source_ids"):
+                if key not in record and not (key == "resolution_source_ids" and record["status"] == "RESOLVED"):
+                    continue
+                refs = record.get(key)
+                if not isinstance(refs, list) or not refs or any(not isinstance(ref, str) or ref not in source_ids for ref in refs):
+                    _error(errors, "SAFETY_EVIDENCE_INVALID", f"{path}[{index}].{key}", "Safety and resolution citations must reference known sources")
+    warnings.append({"code": "STRUCTURAL_VALIDATION_ONLY", "message": "Packet consistency and caller-supplied gates do not certify independent diligence; use the supplied-specialist synthesis contract for citation and skeptical-review checks"})
     if not sources:
         warnings.append({"code": "NO_EVIDENCE_TO_REVIEW", "message": "No evidence records were available for point-in-time checks"})
-    all_required_passed = not missing_gates and not failed_gates and not invalid_gates
+    all_required_passed = not errors and not missing_gates and not failed_gates and not invalid_gates
     return {
         "valid": not errors,
         "errors": errors,

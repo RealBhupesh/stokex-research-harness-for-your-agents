@@ -5,7 +5,8 @@ from datetime import date
 from .queries import cutoff
 
 
-def market_health(connection, as_of: str, *, min_symbols: int = 1, min_history: int = 60) -> dict:
+def market_health(connection, as_of: str, *, min_symbols: int = 1, min_history: int = 60,
+                  known_at: str | None = None) -> dict:
     """Check the requested session, never treating an empty scan as healthy."""
     as_of = date.fromisoformat(as_of).isoformat()
     if min_symbols < 1 or min_history < 1:
@@ -18,7 +19,7 @@ def market_health(connection, as_of: str, *, min_symbols: int = 1, min_history: 
     integrity = [row[0] for row in connection.execute("PRAGMA quick_check")]
     if integrity != ["ok"]:
         issue("DATABASE_INTEGRITY", "BLOCK", "SQLite integrity check failed", checks=integrity)
-    params = (as_of, cutoff(as_of))
+    params = (as_of, cutoff(as_of, known_at))
     latest = connection.execute(
         "SELECT MAX(trade_date) FROM bars WHERE trade_date <= ? AND available_at <= ?", params
     ).fetchone()[0]
@@ -65,11 +66,23 @@ def market_health(connection, as_of: str, *, min_symbols: int = 1, min_history: 
         ("corporate_actions", "ACTIONS_UNVERIFIED", "No explicit corporate-action records supplied"),
     ):
         if connection.execute(
-            f"SELECT COUNT(*) FROM {table} WHERE available_at <= ?", (cutoff(as_of),)
+            f"SELECT COUNT(*) FROM {table} WHERE available_at <= ?", (cutoff(as_of, known_at),)
         ).fetchone()[0] == 0:
             issue(code, "WARN", message)
+    has_provider = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='provider_downloads'"
+    ).fetchone()
+    if has_provider:
+        unknown_basis = connection.execute(
+            "SELECT COUNT(DISTINCT instrument_key) FROM provider_downloads "
+            "WHERE inserted > 0 AND from_date <= ? AND retrieved_at <= ? "
+            "AND price_basis = 'UNVERIFIED_PROVIDER_HISTORY'", params,
+        ).fetchone()[0]
+        if unknown_basis:
+            issue("PROVIDER_PRICE_BASIS_UNVERIFIED", "BLOCK", "Provider adjustment basis needs primary-source reconciliation",
+                  instruments=unknown_basis)
     blocked = any(item["severity"] == "BLOCK" for item in issues)
-    return {"as_of": as_of, "status": "BLOCKED" if blocked else "PASS",
+    return {"as_of": as_of, "research_cutoff": cutoff(as_of, known_at), "status": "BLOCKED" if blocked else "PASS",
             "latest_eligible_session": latest, "symbols": symbols, "symbols_with_history": eligible,
             "requirements": {"min_symbols": min_symbols, "min_history": min_history}, "issues": issues,
             "limitations": "Checks validate supplied data, not source authenticity, universe completeness, "

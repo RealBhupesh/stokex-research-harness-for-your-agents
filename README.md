@@ -16,6 +16,20 @@ skills, templates, reference documents and schemas. See the
 [production operations guide](docs/production-operations.md) for batch ingestion,
 data gates, verified backups, exit codes and remaining deployment requirements.
 
+For coding agents, the [auditable research interface](docs/agent-research.md)
+freezes cited evidence, validates five specialist reports and an independent
+skeptical review, and writes a replayable result bundle:
+
+```bash
+stockex research-synthesize research-input.json --out /data/research-run-001
+stockex research-verify /data/research-run-001
+```
+
+An optional [read-only Upstox adapter](docs/upstox-data.md) imports daily candles
+with raw response provenance and retrieval-based availability. It remains
+experimental: strict research blocks unverified provider price-adjustment bases.
+No broker order execution is included.
+
 Open `SKILL.md` in an assistant with web browsing and file access, or upload this complete folder/archive and instruct it to use the workflow. Read `QUICKSTART.md` for request examples. Skills supply instructions; they cannot grant market-data subscriptions or carry themselves automatically into every future conversation.
 
 > [!WARNING]

@@ -13,21 +13,24 @@ SCORECARD_SCHEMA_VERSION = 3
 
 
 def data_fingerprint(connection, start: str, end: str) -> str:
-    """Hash of the bars and index closes a backtest could read."""
+    """Hash every market input, including publication times and outcome sessions.
+
+    A conservative whole-input snapshot also captures history before ``start``
+    and outcome bars after the last signal. Imports/audit records and journal
+    writes do not change this fingerprint because they are not market inputs.
+    """
     digest = hashlib.sha256()
-    for table, query in (
-        ("bars", "SELECT symbol, series, trade_date, open, high, low, close, volume, delivery_pct "
-                 "FROM bars WHERE trade_date <= ? ORDER BY symbol, series, trade_date"),
-        ("index_bars", "SELECT index_name, trade_date, close FROM index_bars WHERE trade_date <= ? "
-                       "ORDER BY index_name, trade_date"),
-        ("fo_bars", "SELECT symbol, instrument, expiry, strike, trade_date, close, open_interest FROM fo_bars "
-                    "WHERE trade_date <= ? AND instrument = 'FUT' ORDER BY symbol, expiry, trade_date"),
-        ("corporate_actions", "SELECT symbol, ex_date, kind, factor FROM corporate_actions WHERE ex_date <= ? "
-                              "ORDER BY symbol, ex_date, kind"),
-    ):
-        digest.update(table.encode())
-        for row in connection.execute(query, (end,)):
-            digest.update(repr(tuple(row)).encode())
+    digest.update(json.dumps({"fingerprint_version": 2, "start": start, "end": end},
+                             sort_keys=True).encode())
+    for table in ("bars", "index_bars", "fo_bars", "deals", "corporate_actions",
+                  "index_members", "announcements", "restrictions"):
+        columns = [row[1] for row in connection.execute(f"PRAGMA table_info({table})")]
+        digest.update(json.dumps([table, columns], separators=(",", ":")).encode())
+        # Tables and column names above are fixed schema identifiers, never user input.
+        order = ", ".join(f'"{column}"' for column in columns)
+        for row in connection.execute(f'SELECT * FROM "{table}" ORDER BY {order}'):
+            digest.update(json.dumps(list(row), separators=(",", ":"), allow_nan=False).encode())
+            digest.update(b"\n")
     return digest.hexdigest()
 
 

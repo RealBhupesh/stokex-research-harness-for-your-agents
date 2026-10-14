@@ -9,7 +9,7 @@ from ..jev.candidates import CANDIDATE_QUESTION_BANK_VERSION, JudgeBudget, candi
 from ..market.corporate import CATALYST_CATEGORIES
 from ..market.queries import (
     announcements_between, deals_between, futures_history, index_closes, load_histories, option_chain,
-    restrictions_on, sector_map, sector_maps_by_day,
+    restrictions_on, sector_map, sector_maps_by_day, cutoff,
 )
 from .fo import fo_features, option_context
 from .indicators import Features, compute_features
@@ -44,19 +44,20 @@ def _shift(day: str, days: int) -> str:
 
 
 def prepare_universe(connection, as_of: str, *, start: str | None = None, lookback_days: int = 420,
-                     events: dict | None = None, symbols: list[str] | None = None) -> Universe:
+                     events: dict | None = None, symbols: list[str] | None = None,
+                     known_at: str | None = None) -> Universe:
     """Load and featurise every symbol with data up to ``as_of``."""
     load_from = _shift(start or as_of, -lookback_days)
-    benchmark = index_closes(connection, BENCHMARK_INDEX, as_of)
+    benchmark = index_closes(connection, BENCHMARK_INDEX, as_of, known_at=known_at)
     notes = [] if benchmark else [f"No {BENCHMARK_INDEX} index data: relative strength and regime are unavailable"]
-    histories = load_histories(connection, as_of, start=load_from, symbols=symbols)
+    histories = load_histories(connection, as_of, start=load_from, symbols=symbols, known_at=known_at)
     features = {symbol: compute_features(series, benchmark or None) for symbol, series in histories.items()}
-    futures = futures_history(connection, as_of, start=load_from, symbols=symbols)
+    futures = futures_history(connection, as_of, start=load_from, symbols=symbols, known_at=known_at)
     fo = {symbol: fo_features(f.series.dates, futures.get(symbol)) for symbol, f in features.items()}
     deals: dict = {}
-    for deal in deals_between(connection, load_from, as_of):
+    for deal in deals_between(connection, load_from, as_of, known_at=known_at):
         deals.setdefault(deal["symbol"], []).append(deal)
-    vix = index_closes(connection, VIX_INDEX, as_of)
+    vix = index_closes(connection, VIX_INDEX, as_of, known_at=known_at)
     sectors = {symbol: sector for symbol, sector in sector_map(connection, as_of).items() if symbol in features}
     days = sorted({day for f in features.values() for day in f.series.dates})
     sectors_by_day = sector_maps_by_day(connection, days)
@@ -315,6 +316,8 @@ def jev_proof(scorecard: dict | None, client) -> dict:
         return {"status": "UNPROVEN", "reason": "Scorecard used a different Jev question bank"}
     if section.get("model_requested") != model:
         return {"status": "UNPROVEN", "reason": f"Scorecard measured Jev model {section.get('model_requested')}, not {model}"}
+    if section.get("proof_version") != 2:
+        return {"status": "UNPROVEN", "reason": "Judge proof does not use the current causal calibration contract"}
     if section.get("status") != "PROVEN":
         return {"status": "UNPROVEN", "reason": "; ".join(section.get("reasons", [])) or "Not proven"}
     return {"status": "PROVEN", "reason": f"Brier skill {section['brier_skill']}, AUC {section['auc']}",
@@ -328,6 +331,8 @@ def model_proof(scorecard: dict | None) -> dict:
         return {"status": "NO_SCORECARD", "reason": "No trained model in the scorecard (run `backtest`)"}
     if section.get("feature_version") != MODEL_FEATURE_VERSION:
         return {"status": "UNPROVEN", "reason": "Scorecard model used a different feature version"}
+    if section.get("proof_version") != 2:
+        return {"status": "UNPROVEN", "reason": "Model proof does not use the current causal calibration contract"}
     if section.get("status") != "PROVEN":
         return {"status": "UNPROVEN", "reason": "; ".join(section.get("reasons", [])) or "Not proven"}
     return {"status": "PROVEN", "reason": f"Brier skill {section['brier_skill']}, AUC {section['auc']}",
@@ -396,7 +401,8 @@ def apply_meta(universe: Universe, day: str, result: dict, *, scorecard=None, cl
 
 
 def scan(connection, as_of: str, *, setups=None, setup_params=None, risk_params=None, scorecard=None,
-         events=None, top: int = 10, jev_client=None, jev_cache=None, live: dict | None = None) -> dict:
+         events=None, top: int = 10, jev_client=None, jev_cache=None, live: dict | None = None,
+         known_at: str | None = None) -> dict:
     if top < 1:
         raise ValueError("top must be positive")
     # Reject before evaluating candidates or calling any paid judge.
@@ -407,8 +413,9 @@ def scan(connection, as_of: str, *, setups=None, setup_params=None, risk_params=
             raise ValueError("Scorecard must specify period.to and period.data_through")
         if max(date.fromisoformat(value) for value in boundaries) >= date.fromisoformat(as_of):
             raise ValueError("Scorecard outcomes overlap the scan date; use an out-of-sample scorecard")
-    universe = prepare_universe(connection, as_of, events=events)
-    restrictions = restrictions_on(connection, as_of, through=_shift(as_of, 4))
+    research_cutoff = cutoff(as_of, known_at)
+    universe = prepare_universe(connection, as_of, events=events, known_at=known_at)
+    restrictions = restrictions_on(connection, as_of, through=_shift(as_of, 4), known_at=known_at)
     result = evaluate_day(universe, as_of, setups=setups, setup_params=setup_params,
                           risk_params=risk_params, scorecard=scorecard, restrictions=restrictions)
     meta = None
@@ -425,7 +432,7 @@ def scan(connection, as_of: str, *, setups=None, setup_params=None, risk_params=
     result["rejected"] = result["rejected"] + capped
     for candidate in result["candidates"][:top]:
         if candidate["fo"] is not None:
-            chain = option_chain(connection, candidate["symbol"], as_of)
+            chain = option_chain(connection, candidate["symbol"], as_of, known_at=known_at)
             if chain:
                 candidate["fo"].update(_rounded(option_context(chain, as_of)))
     traded = [f for f in universe.features.values() if f.index_of(as_of) is not None]
@@ -445,6 +452,7 @@ def scan(connection, as_of: str, *, setups=None, setup_params=None, risk_params=
             notes.append(f"{name.title()} shown for information only ({proof['status']}): {proof['reason']}")
     return {
         "as_of": as_of,
+        "research_cutoff": research_cutoff,
         "universe": {"symbols_with_data": len(universe.features), "traded_on_date": len(traded)},
         "regime": result["regime"],
         "setups": list(setups or SETUPS),

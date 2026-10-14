@@ -54,7 +54,7 @@ class SequenceClient:
 
 def proven_scorecard(base_rate=0.5):
     return {"period": {"to": "2020-01-01", "data_through": "2020-01-15"},
-            "jev": {"status": "PROVEN", "question_bank_version": CANDIDATE_QUESTION_BANK_VERSION,
+            "jev": {"status": "PROVEN", "proof_version": 2, "question_bank_version": CANDIDATE_QUESTION_BANK_VERSION,
                     "model_requested": "jev-test", "brier_skill": 0.1, "auc": 0.62,
                     "base_rates": {name: base_rate for name in SETUPS}}}
 

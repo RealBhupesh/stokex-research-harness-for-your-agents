@@ -32,6 +32,14 @@ python -m stockex.cli backtest market.sqlite3 --from 2025-10-01 --to 2026-07-31 
 ```
 
 Every filled backtest trade is judged, and its outcome (`t1_hit`) is recorded. The scorecard's `jev` section reports:
+
+Proof contract version 2 excludes censored outcomes and requires dated,
+strictly completed prior outcomes for each setup baseline. It requires at least
+20 distinct signal sessions, four temporal folds and clustered confidence bounds
+for Brier improvement, AUC and filtering uplift. A whole-sample base rate or a
+single crowded signal day cannot establish proof. Scanner gates reject earlier
+proof versions even when their saved status says `PROVEN`.
+
 - **Brier score** against the setup's own T1 base rate, and the resulting **Brier skill** (above 0 means better calibrated than the base rate);
 - **AUC** (how well Jev ranks winners above losers; 0.5 is random);
 - a **reliability table** (predicted against observed hit rate in five buckets);

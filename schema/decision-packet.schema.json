@@ -3,25 +3,70 @@
   "$id": "https://stockex.local/schema/decision-packet.schema.json",
   "title": "STOCKEX decision packet",
   "type": "object",
-  "required": ["metadata", "mandate", "sources", "gates", "risks", "contradictions", "decision"],
+  "required": [
+    "metadata",
+    "mandate",
+    "sources",
+    "gates",
+    "risks",
+    "contradictions",
+    "decision"
+  ],
   "properties": {
     "metadata": {
       "type": "object",
-      "required": ["issuer", "symbol", "exchange", "research_cutoff"],
+      "required": [
+        "issuer",
+        "symbol",
+        "exchange",
+        "research_cutoff"
+      ],
       "properties": {
-        "issuer": {"type": "string", "minLength": 1},
-        "symbol": {"type": "string", "minLength": 1},
-        "exchange": {"enum": ["NSE", "BSE"]},
-        "research_cutoff": {"type": "string", "format": "date-time"}
+        "issuer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "exchange": {
+          "enum": [
+            "NSE",
+            "BSE"
+          ]
+        },
+        "research_cutoff": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     },
     "mandate": {
       "type": "object",
-      "required": ["mode", "horizon", "personalized_sizing"],
+      "required": [
+        "mode",
+        "horizon",
+        "personalized_sizing"
+      ],
       "properties": {
-        "mode": {"enum": ["CAPITAL_PRESERVATION", "LONG_TERM_COMPOUNDING", "TACTICAL_SWING", "EVENT_DRIVEN", "ASYMMETRIC_SPECULATION", "AGGRESSIVE_SHORT_TERM"]},
-        "horizon": {"type": "string", "minLength": 1},
-        "personalized_sizing": {"type": "boolean"}
+        "mode": {
+          "enum": [
+            "CAPITAL_PRESERVATION",
+            "LONG_TERM_COMPOUNDING",
+            "TACTICAL_SWING",
+            "EVENT_DRIVEN",
+            "ASYMMETRIC_SPECULATION",
+            "AGGRESSIVE_SHORT_TERM"
+          ]
+        },
+        "horizon": {
+          "type": "string",
+          "minLength": 1
+        },
+        "personalized_sizing": {
+          "type": "boolean"
+        }
       }
     },
     "sources": {
@@ -29,50 +74,336 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "publisher", "url", "source_class", "published_at", "available_at"]
+        "required": [
+          "id",
+          "publisher",
+          "url",
+          "source_class",
+          "published_at",
+          "available_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "publisher": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source_class": {
+            "type": "string",
+            "minLength": 1
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "available_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
     },
-    "gates": {"type": "object", "additionalProperties": {"type": "boolean"}},
+    "gates": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "boolean"
+      }
+    },
     "risks": {
       "type": "object",
-      "required": ["hard_stops"],
-      "properties": {"hard_stops": {"type": "array"}}
+      "required": [
+        "hard_stops"
+      ],
+      "properties": {
+        "hard_stops": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "status"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "enum": [
+                  "OPEN",
+                  "RESOLVED"
+                ]
+              },
+              "source_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "resolution_source_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "status": {
+                      "const": "RESOLVED"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "resolution_source_ids"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
     },
-    "contradictions": {"type": "array"},
+    "contradictions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "controlling"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "OPEN",
+              "RESOLVED"
+            ]
+          },
+          "source_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "resolution_source_ids": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "controlling": {
+            "type": "boolean"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "RESOLVED"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "resolution_source_ids"
+              ]
+            }
+          }
+        ]
+      }
+    },
     "legal_credit": {
       "type": "object",
-      "properties": {"issues": {"type": "array"}}
+      "properties": {
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "status",
+              "severity"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "status": {
+                "enum": [
+                  "OPEN",
+                  "RESOLVED"
+                ]
+              },
+              "source_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "resolution_source_ids": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "severity": {
+                "enum": [
+                  "LOW",
+                  "MODERATE",
+                  "MATERIAL",
+                  "BLOCKER"
+                ]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "status": {
+                      "const": "RESOLVED"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "resolution_source_ids"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "issues"
+      ]
     },
     "speculation_controls": {
       "type": "object",
       "properties": {
-        "max_capital_at_risk": {"type": "number", "exclusiveMinimum": 0},
-        "total_loss_accepted": {"const": true},
-        "catalyst": {"type": "string", "minLength": 1},
-        "pre_event_exit_plan": {"type": "string", "minLength": 1},
-        "post_event_exit_plan": {"type": "string", "minLength": 1},
-        "liquidity_passed": {"const": true}
+        "max_capital_at_risk": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "total_loss_accepted": {
+          "const": true
+        },
+        "catalyst": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pre_event_exit_plan": {
+          "type": "string",
+          "minLength": 1
+        },
+        "post_event_exit_plan": {
+          "type": "string",
+          "minLength": 1
+        },
+        "liquidity_passed": {
+          "const": true
+        }
       }
     },
     "trade_plan": {
       "type": "object",
       "properties": {
-        "entry": {"type": "number", "exclusiveMinimum": 0},
-        "stop": {"type": "number", "exclusiveMinimum": 0},
-        "target": {"type": "number", "exclusiveMinimum": 0},
-        "time_stop_sessions": {"type": "integer", "minimum": 1, "maximum": 20},
-        "position_size_rupees": {"type": "number", "exclusiveMinimum": 0},
-        "liquidity_passed": {"const": true},
-        "setup": {"type": "string"},
-        "scorecard_status": {"enum": ["PROVEN", "UNPROVEN", "NO_SCORECARD"]}
+        "entry": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "stop": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "target": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "time_stop_sessions": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "position_size_rupees": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "liquidity_passed": {
+          "const": true
+        },
+        "setup": {
+          "type": "string"
+        },
+        "scorecard_status": {
+          "enum": [
+            "PROVEN",
+            "UNPROVEN",
+            "NO_SCORECARD"
+          ]
+        }
       }
     },
     "decision": {
       "type": "object",
-      "required": ["research_status", "ic_action"],
+      "required": [
+        "research_status",
+        "ic_action"
+      ],
       "properties": {
-        "research_status": {"enum": ["RESEARCH_CANDIDATE", "SPECULATIVE_RESEARCH_CANDIDATE", "WATCH", "REJECT", "SCREEN_ONLY", "INSUFFICIENT_DATA"]},
-        "ic_action": {"enum": ["APPROVE_FOR_CONSIDERATION", "APPROVE_WITH_CONDITIONS", "RETURN_FOR_WORK", "VETO"]}
+        "research_status": {
+          "enum": [
+            "RESEARCH_CANDIDATE",
+            "SPECULATIVE_RESEARCH_CANDIDATE",
+            "WATCH",
+            "REJECT",
+            "SCREEN_ONLY",
+            "INSUFFICIENT_DATA"
+          ]
+        },
+        "ic_action": {
+          "enum": [
+            "APPROVE_FOR_CONSIDERATION",
+            "APPROVE_WITH_CONDITIONS",
+            "RETURN_FOR_WORK",
+            "VETO"
+          ]
+        }
       }
     }
   }
