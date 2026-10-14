@@ -23,7 +23,11 @@ def normalize_timestamp(value: str, path: str) -> str:
             "TIMESTAMP_PRECISION_UNSUPPORTED", path, "Timestamps must use whole-second precision"
         )
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        # Python 3.10 accepts fewer zero-fraction spellings than newer runtimes.
+        # Removing only proven all-zero fractions preserves the whole-second
+        # contract without silently truncating nonzero publication precision.
+        parse_value = re.sub(r"(?<=\d)[.,]0+(?=Z|[+-]|$)", "", value)
+        parsed = datetime.fromisoformat(parse_value.replace("Z", "+00:00"))
     except (TypeError, ValueError):
         raise StoreValidationError("TIMESTAMP_INVALID", path, "Timestamp must be a valid ISO 8601 value")
     if parsed.tzinfo is None:

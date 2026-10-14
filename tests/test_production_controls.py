@@ -2,6 +2,7 @@
 
 import contextlib
 import io
+import importlib
 import json
 from pathlib import Path
 import sqlite3
@@ -103,7 +104,7 @@ class ProductionControlsTests(unittest.TestCase):
     def test_overlapping_scorecard_rejected_before_loading_or_judging(self):
         for period in ({"to": "2026-09-21", "data_through": "2026-09-21"},
                        {"to": "2026-09-01", "data_through": "2026-09-22"}, {}):
-            with patch("stockex.signals.scan.prepare_universe") as prepare:
+            with patch.object(importlib.import_module("stockex.signals.scan"), "prepare_universe") as prepare:
                 with self.assertRaises(ValueError):
                     scan(self.db, "2026-09-21", scorecard={"period": period})
                 prepare.assert_not_called()
