@@ -62,7 +62,7 @@ def prepare_universe(connection, as_of: str, *, start: str | None = None, lookba
     days = sorted({day for f in features.values() for day in f.series.dates})
     sectors_by_day = sector_maps_by_day(connection, days)
     _add_sector_strength(features, sectors, sectors_by_day)
-    catalysts = _announcement_catalysts(connection, features, load_from, as_of)
+    catalysts = _announcement_catalysts(connection, features, load_from, as_of, known_at=known_at)
     merged_events: dict = {}
     for symbol, by_day in catalysts.items():
         merged_events[symbol] = {day: item["type"] for day, item in by_day.items()}
@@ -114,9 +114,9 @@ def _effective_day(broadcast_at: str, trading_days: list[str]) -> str | None:
     return trading_days[index] if index < len(trading_days) else None
 
 
-def _announcement_catalysts(connection, features: dict, start: str, as_of: str) -> dict:
+def _announcement_catalysts(connection, features: dict, start: str, as_of: str, *, known_at=None) -> dict:
     result: dict = {}
-    for symbol, rows in announcements_between(connection, start, as_of).items():
+    for symbol, rows in announcements_between(connection, start, as_of, known_at=known_at).items():
         f = features.get(symbol)
         if f is None:
             continue
@@ -127,8 +127,10 @@ def _announcement_catalysts(connection, features: dict, start: str, as_of: str) 
             if day is None:
                 continue
             result.setdefault(symbol, {}).setdefault(day, {
-                "type": row["category"], "date": day, "source": "NSE announcement",
-                "subject": row["subject"][:160], "verified": True,
+                "type": row["category"], "date": day,
+                "source": "Jev interpretation of NSE announcement" if row.get("classification") else "NSE announcement",
+                "subject": row["subject"][:160], "verified": not bool(row.get("classification")),
+                **({"classification": row["classification"]} if row.get("classification") else {}),
             })
     return result
 

@@ -21,6 +21,7 @@ from .market.health import market_health
 from .operations import atomic_json, backup_database
 from .providers import ProviderError, sync_upstox
 from .providers.upstox import strict_json
+from .providers.reconcile import reconcile_provider
 from .research_run import run_research, verify_research_bundle
 from .market.queries import coverage
 from .market.schema import open_market_db
@@ -92,6 +93,10 @@ def _parser() -> argparse.ArgumentParser:
     provider.add_argument("--from", dest="start", required=True)
     provider.add_argument("--to", dest="end", required=True)
     provider.add_argument("--raw-dir", required=True, type=Path)
+    reconcile = commands.add_parser("provider-reconcile", help="compare retained provider candles to supplied raw NSE files")
+    reconcile.add_argument("database", type=Path)
+    reconcile.add_argument("reference_database", type=Path)
+    reconcile.add_argument("--source-url", required=True)
 
     jev = commands.add_parser("jev-triage", help="advisory Jev triage of a cutoff evidence packet")
     jev.add_argument("database", type=Path)
@@ -259,7 +264,7 @@ def _run(args: argparse.Namespace) -> object:
         with PointInTimeStore.open(args.database) as store:
             return import_jsonl(store, args.source)
 
-    if args.command in {"market-import", "provider-sync", "market-status", "market-health", "scan", "backtest", "announcements-classify",
+    if args.command in {"market-import", "provider-sync", "provider-reconcile", "market-status", "market-health", "scan", "backtest", "announcements-classify",
                         "journal-update", "journal-report"}:
         return _run_market(args)
 
@@ -287,6 +292,8 @@ def _run_market(args: argparse.Namespace) -> object:
         raise ValueError(f"Database does not exist: {args.database}")
     connection = open_market_db(args.database)
     try:
+        if args.command == "provider-reconcile":
+            return reconcile_provider(connection, args.reference_database, args.source_url)
         if args.command == "provider-sync":
             manifest = strict_json(args.manifest.read_bytes())
             return sync_upstox(connection, manifest, _check_date(args.start, "--from"),

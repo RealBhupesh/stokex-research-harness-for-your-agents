@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import pathlib
 import sys
 import tempfile
@@ -160,14 +161,17 @@ class JevAnnouncementTests(unittest.TestCase):
                 Stub.calls.append(state["subject"])
                 choice, confidence = ("ORDER_WIN", 0.9) if state["subject"] == "Press Release" else ("BUYBACK", 0.3)
                 return {"model": "jev-1", "answers": {
-                    "category": {"type": "choice", "choice": choice, "confidence": confidence},
+                    "category": {"type": "choice", "choice": choice, "confidence": confidence,
+                                 "probabilities": {key: float(key == choice) for key in questions["category"]["criteria"]}},
                     "material": {"type": "noul", "noul": 0.7}}}
 
-        counts = classify_with_jev(db, Stub())
+        counts = classify_with_jev(db, Stub(), clock=lambda: datetime(2026, 9, 23, tzinfo=timezone.utc))
         self.assertEqual(counts, {"examined": 2, "reclassified": 1, "kept_other": 1, "errors": 0})
         self.assertEqual(sorted(Stub.calls), ["Press Release", "Updates"])
         rows = dict(db.execute("SELECT subject, category || '/' || category_source FROM announcements").fetchall())
-        self.assertEqual(rows["Press Release"], "ORDER_WIN/JEV")
-        self.assertEqual(rows["Updates"], "OTHER/JEV_LOW_CONFIDENCE")
+        self.assertEqual(rows["Press Release"], "OTHER/KEYWORD")
+        self.assertEqual(rows["Updates"], "OTHER/KEYWORD")
         self.assertEqual(rows["Financial Results for the quarter"], "RESULTS/KEYWORD")
         self.assertEqual(classify_with_jev(db, Stub())["examined"], 0)
+        annotations = list(db.execute("SELECT category, applied_category FROM announcement_classifications ORDER BY subject"))
+        self.assertEqual([tuple(row) for row in annotations], [("ORDER_WIN", "ORDER_WIN"), ("BUYBACK", "OTHER")])

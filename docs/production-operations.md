@@ -197,3 +197,18 @@ historical membership and delistings, exchange calendars and surveillance-list
 coverage. Benchmark the complete strategy on untouched data and forward journal
 results. Monitor missing batches, skipped rows, changing coverage, API failures
 and backup checksums. Choose thresholds and retention policies explicitly.
+
+## Announcement annotations
+
+Schema v5 keeps Jev classifications separate from imported announcement rows.
+Each immutable annotation records the exact input hash, question-bank version,
+requested and returned model, confidence policy, judgment timestamp and validated
+answer. A query can use only interpretations available by its research cutoff.
+The original keyword category remains inspectable. Untimed legacy Jev mutations
+are suppressed until a timestamped annotation is supplied.
+
+Model-derived catalysts identify their interpretation source and remain
+`verified: false`; a category judgment cannot become primary-source verification.
+Repeated classifications reuse their first knowledge timestamp. An incompatible
+or conflicting result cannot silently replace a previous annotation. These
+records also participate in the market-input fingerprint.

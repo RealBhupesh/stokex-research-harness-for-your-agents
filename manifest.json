@@ -1,5 +1,5 @@
 {
-  "version": "5.3.0.dev1",
+  "version": "5.3.0.dev2",
   "created": "2026-09-13",
   "entrypoint": "SKILL.md",
   "specialist_skills": [
@@ -125,6 +125,7 @@
     "stockex/market/schema.py",
     "stockex/operations.py",
     "stockex/providers/__init__.py",
+    "stockex/providers/reconcile.py",
     "stockex/providers/upstox.py",
     "stockex/research.py",
     "stockex/research_run.py",
@@ -171,6 +172,7 @@
     "tests/test_corporate_actions.py",
     "tests/test_decision_packet.py",
     "tests/test_forecasting.py",
+    "tests/test_jev_announcements.py",
     "tests/test_jev_calibration.py",
     "tests/test_jev_candidates.py",
     "tests/test_jev_client.py",
@@ -185,6 +187,7 @@
     "tests/test_operations.py",
     "tests/test_portfolio_execution.py",
     "tests/test_production_controls.py",
+    "tests/test_provider_reconcile.py",
     "tests/test_repository_integrity.py",
     "tests/test_research.py",
     "tests/test_research_run.py",

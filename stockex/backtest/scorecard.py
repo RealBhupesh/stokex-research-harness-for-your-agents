@@ -23,7 +23,7 @@ def data_fingerprint(connection, start: str, end: str) -> str:
     digest.update(json.dumps({"fingerprint_version": 2, "start": start, "end": end},
                              sort_keys=True).encode())
     for table in ("bars", "index_bars", "fo_bars", "deals", "corporate_actions",
-                  "index_members", "announcements", "restrictions"):
+                  "index_members", "announcements", "announcement_classifications", "restrictions"):
         columns = [row[1] for row in connection.execute(f"PRAGMA table_info({table})")]
         digest.update(json.dumps([table, columns], separators=(",", ":")).encode())
         # Tables and column names above are fixed schema identifiers, never user input.

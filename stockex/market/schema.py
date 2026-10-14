@@ -8,7 +8,7 @@ import sqlite3
 from ..operations import atomic_transaction
 
 
-MARKET_SCHEMA_VERSION = 4
+MARKET_SCHEMA_VERSION = 5
 
 _TABLES = (
     """
@@ -138,6 +138,33 @@ _TABLES = (
         PRIMARY KEY (symbol, broadcast_at, subject)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS announcement_classifications (
+        classification_id TEXT PRIMARY KEY,
+        symbol TEXT NOT NULL,
+        broadcast_at TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        input_sha256 TEXT NOT NULL,
+        question_bank_version TEXT NOT NULL,
+        model_requested TEXT NOT NULL,
+        model_returned TEXT NOT NULL,
+        judged_at TEXT NOT NULL,
+        confidence REAL NOT NULL CHECK(confidence >= 0 AND confidence <= 1),
+        confidence_floor REAL NOT NULL CHECK(confidence_floor > 0 AND confidence_floor <= 1),
+        category TEXT NOT NULL,
+        applied_category TEXT NOT NULL,
+        response_json TEXT NOT NULL,
+        UNIQUE(symbol, broadcast_at, subject, input_sha256, question_bank_version, model_requested, confidence_floor),
+        FOREIGN KEY(symbol, broadcast_at, subject) REFERENCES announcements(symbol, broadcast_at, subject)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS announcement_classifications_cutoff ON announcement_classifications(judged_at)",
+    """CREATE TRIGGER IF NOT EXISTS immutable_announcement_classification_update
+       BEFORE UPDATE ON announcement_classifications BEGIN
+       SELECT RAISE(ABORT, 'Announcement classifications are immutable'); END""",
+    """CREATE TRIGGER IF NOT EXISTS immutable_announcement_classification_delete
+       BEFORE DELETE ON announcement_classifications BEGIN
+       SELECT RAISE(ABORT, 'Announcement classifications are immutable'); END""",
     """
     CREATE TABLE IF NOT EXISTS journal (
         scan_date TEXT NOT NULL,

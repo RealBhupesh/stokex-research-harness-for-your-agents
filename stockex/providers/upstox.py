@@ -175,7 +175,7 @@ class UpstoxClient:
         if any(ord(character) < 33 or ord(character) > 126 for character in self._token):
             raise ProviderError("PROVIDER_CONFIG_INVALID", "Provider token contains invalid header characters")
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) \
-                or not math.isfinite(timeout) or not 0 < timeout <= 120:
+                or not 0 < timeout <= 120 or not math.isfinite(timeout):
             raise ValueError("Provider timeout must be in (0, 120] seconds")
         self.timeout, self._transport, self._sleeper = timeout, transport or _transport, sleeper
         self._clock = clock or (lambda: datetime.now(timezone.utc))
@@ -299,6 +299,9 @@ def sync_upstox(connection, manifest, start, end, raw_directory, *, client=None,
     summaries = []
     with tempfile.TemporaryDirectory(prefix="stockex-provider-") as temporary:
         with atomic_transaction(connection):
+            connection.execute("CREATE TABLE IF NOT EXISTS provider_manifests (sha256 TEXT PRIMARY KEY, manifest_json TEXT NOT NULL)")
+            connection.execute("INSERT OR IGNORE INTO provider_manifests VALUES (?, ?)",
+                               (manifest_sha256, json.dumps(manifest, sort_keys=True, separators=(",", ":"))))
             connection.execute("""CREATE TABLE IF NOT EXISTS provider_downloads (
                 sync_id TEXT NOT NULL, instrument_key TEXT NOT NULL, name TEXT NOT NULL,
                 request_url TEXT NOT NULL, from_date TEXT NOT NULL, to_date TEXT NOT NULL,

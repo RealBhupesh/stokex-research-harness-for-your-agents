@@ -63,10 +63,31 @@ The reviewed provider documentation does not establish the adjustment basis of
 every historical candle. Downloads are marked `UNVERIFIED_PROVIDER_HISTORY`.
 Combining already-adjusted history with independent corporate actions could
 double-adjust prices. Accordingly, strict data health blocks these instruments
-until the price basis is reconciled against primary raw price and corporate-action
-vintages. The current release has no command that certifies that reconciliation;
-keep this adapter experimental and retain the raw inputs. A normal exploratory
-scan can inspect the data, but does not resolve this gate.
+until the downloaded vintages are reconciled against retained supplied raw files.
+
+```bash
+stockex market-import /data/nse-raw.sqlite3 /data/nse-files/*.csv
+stockex provider-reconcile /data/market.sqlite3 /data/nse-raw.sqlite3 \
+  --source-url https://nsearchives.nseindia.com/products/content/
+```
+
+Reconciliation verifies retained file hashes, rebuilds their raw prices in a
+temporary database, and requires exact agreement with both those files and the
+reference database for every downloaded candle. Equity comparisons include ISIN,
+series, volume and OHLC. Index comparisons use OHLC. A single missing/conflicting
+candle fails the entire reconciliation. A provider database cannot serve as its
+own raw reference. Source bytes and the original mapping manifest must be retained;
+older downloads without a retained mapping need a re-sync with that mapping.
+
+Receipts bind provider response hashes, mapping identity, raw reference hashes,
+reference snapshot and the comparison timestamp. A receipt releases the basis
+gate only for matched download vintages and only at or after that timestamp.
+Later downloads need their own match. `MATCHED_SUPPLIED_RAW` means exact agreement
+with supplied data; it does not authenticate that data, prove a provider-wide
+adjustment policy, validate dates outside the match, or certify corporate-action
+completeness. The exchange URL is an operator-supplied provenance assertion, not
+evidence of a network download. Keep this adapter experimental until authorized
+live data and primary corporate-action cases have been independently reconciled.
 
 Tests use documented response-shaped fixtures and injected transports. No live
 account request or licensed dataset reconciliation has been performed. Passing

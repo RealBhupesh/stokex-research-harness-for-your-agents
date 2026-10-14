@@ -73,10 +73,19 @@ def market_health(connection, as_of: str, *, min_symbols: int = 1, min_history: 
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='provider_downloads'"
     ).fetchone()
     if has_provider:
+        has_receipts = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='provider_reconciliations'"
+        ).fetchone()
+        receipt_clause = (
+            " AND NOT EXISTS (SELECT 1 FROM provider_reconciliations r WHERE r.sync_id=p.sync_id "
+            "AND r.instrument_key=p.instrument_key AND r.raw_sha256=p.raw_sha256 "
+            "AND r.price_basis='MATCHED_SUPPLIED_RAW' AND r.verified_at <= ?)"
+        ) if has_receipts else ""
         unknown_basis = connection.execute(
-            "SELECT COUNT(DISTINCT instrument_key) FROM provider_downloads "
+            "SELECT COUNT(DISTINCT instrument_key) FROM provider_downloads p "
             "WHERE inserted > 0 AND from_date <= ? AND retrieved_at <= ? "
-            "AND price_basis = 'UNVERIFIED_PROVIDER_HISTORY'", params,
+            "AND price_basis = 'UNVERIFIED_PROVIDER_HISTORY'" + receipt_clause,
+            (*params, cutoff(as_of, known_at)) if has_receipts else params,
         ).fetchone()[0]
         if unknown_basis:
             issue("PROVIDER_PRICE_BASIS_UNVERIFIED", "BLOCK", "Provider adjustment basis needs primary-source reconciliation",

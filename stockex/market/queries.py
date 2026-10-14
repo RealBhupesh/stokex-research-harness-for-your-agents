@@ -264,15 +264,45 @@ def sector_maps_by_day(connection, days: list[str]) -> dict[str, dict[str, str]]
     return result
 
 
-def announcements_between(connection, start: str, end: str) -> dict[str, list[dict]]:
-    """Announcements broadcast between ``start`` and the end-of-day cutoff of ``end``, by symbol."""
+def announcements_between(connection, start: str, end: str, *, known_at: str | None = None) -> dict[str, list[dict]]:
+    """Exchange evidence with only model interpretations known by the cutoff.
+
+    Raw categories remain available; model labels carry their own provenance and
+    are interpretations, never verified exchange categorizations.
+    """
+    from ..jev.announcements import announcement_hash
+
+    research_cutoff = cutoff(end, known_at)
     rows = connection.execute(
         "SELECT * FROM announcements WHERE broadcast_at >= ? AND broadcast_at <= ? ORDER BY broadcast_at",
-        (f"{start}T00:00:00Z", cutoff(end)),
+        (f"{start}T00:00:00Z", min(cutoff(end), research_cutoff)),
     ).fetchall()
+    annotations = connection.execute(
+        "SELECT * FROM announcement_classifications WHERE judged_at <= ? AND broadcast_at >= ? AND broadcast_at <= ? "
+        "ORDER BY judged_at DESC, confidence_floor DESC, classification_id DESC",
+        (research_cutoff, f"{start}T00:00:00Z", cutoff(end))
+    ).fetchall()
+    latest = {}
+    for annotation in annotations:
+        key = (annotation["symbol"], annotation["broadcast_at"], annotation["subject"], annotation["input_sha256"])
+        latest.setdefault(key, dict(annotation))
     result: dict[str, list[dict]] = {}
     for row in rows:
-        result.setdefault(row["symbol"], []).append(dict(row))
+        item = dict(row)
+        item["raw_category"] = item["category"]
+        item["raw_category_source"] = item["category_source"]
+        key = (row["symbol"], row["broadcast_at"], row["subject"], announcement_hash(row["subject"], row["details"]))
+        annotation = latest.get(key)
+        legacy = row["category_source"] in {"JEV", "JEV_LOW_CONFIDENCE"}
+        if legacy:
+            # Pre-v5 in-place labels have no model or knowledge timestamp.
+            item["category"] = "OTHER"
+            item["category_source"] = "JEV_LEGACY_UNTIMED"
+        if ((row["category"] == "OTHER" and row["category_source"] == "KEYWORD") or legacy) and annotation:
+            item["category"] = annotation["applied_category"]
+            item["category_source"] = "JEV_INTERPRETATION"
+            item["classification"] = annotation
+        result.setdefault(row["symbol"], []).append(item)
     return result
 
 
