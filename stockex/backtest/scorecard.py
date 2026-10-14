@@ -8,8 +8,8 @@ from ..signals.setups import SETUP_VERSIONS
 from .statistics import MIN_TRADES, assess
 
 
-# Version 2: PROVEN requires a clustered bootstrap bound and fold stability.
-SCORECARD_SCHEMA_VERSION = 2
+# Version 3: distinct-session folds, block bootstrap, and completed outcomes only.
+SCORECARD_SCHEMA_VERSION = 3
 
 
 def data_fingerprint(connection, start: str, end: str) -> str:
@@ -35,6 +35,8 @@ def build_scorecard(result: dict, fingerprint: str, *, created_at: datetime | No
     created = (created_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
     trades_by_setup: dict = {}
     for trade in result.get("trades", []):
+        if trade.get("exit_reason") == "END_OF_DATA":
+            continue
         trades_by_setup.setdefault(trade["setup"], []).append(trade)
     setup_tests = max(1, len(trades_by_setup))
     regime_tests = max(1, len({(t["setup"], t["regime"]) for t in result.get("trades", [])}))

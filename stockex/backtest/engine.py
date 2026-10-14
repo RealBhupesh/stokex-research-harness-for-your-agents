@@ -7,6 +7,7 @@ Exits are checked conservatively on daily bars: a gap below the stop exits at
 the open, and when a bar touches both the stop and a target, the stop wins.
 """
 
+from bisect import bisect_right
 from collections import defaultdict
 from datetime import date, timedelta
 
@@ -98,6 +99,7 @@ def simulate_trade(series, signal_index: int, plan: dict, *, cost_bps: float) ->
 
 
 def _stats(trades: list[dict]) -> dict:
+    trades = [t for t in trades if t.get("exit_reason") != "END_OF_DATA"]
     if not trades:
         return {"trades": 0, "hit_rate": None, "expectancy_r": None, "avg_return_pct": None,
                 "profit_factor": None, "avg_sessions_held": None, "worst_r": None, "max_losing_streak": 0,
@@ -157,20 +159,36 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
     days = trading_dates(connection, start, end)
     signal_trades, daily_candidates = [], {}
     for n, day in enumerate(days):
-        model.maybe_refit(day, signal_trades)
+        model.maybe_refit(day, [t for t in signal_trades if t["exit_reason"] != "END_OF_DATA"])
         restrictions = restrictions_on(connection, day, through=_shift(day, 4))
-        result = evaluate_day(universe, day, setups=setups, setup_params=setup_params,
+        signal_universe = prepare_universe(connection, day, start=start, events=events)
+        result = evaluate_day(signal_universe, day, setups=setups, setup_params=setup_params,
                               risk_params=risk, restrictions=restrictions)
         daily_candidates[day] = (result["regime"]["label"], result["candidates"])
         for candidate in result["candidates"]:
             f = universe.features[candidate["symbol"]]
-            trade = simulate_trade(f.series, f.index_of(day), candidate["plan"], cost_bps=cost_bps)
+            factor = 1.0
+            for action in getattr(f.series, "adjustments", []):
+                if action["ex_date"] > day:
+                    factor *= action["factor"]
+            plan = dict(candidate["plan"])
+            for key in ("entry", "stop", "t1", "t2", "round_trip_cost_per_share"):
+                if plan.get(key) is not None:
+                    plan[key] *= factor
+            trade = simulate_trade(f.series, f.index_of(day), plan, cost_bps=cost_bps)
+            if trade and trade["filled"]:
+                trade["price_scale"] = 1 / factor
+                for key in ("fill", "initial_stop"):
+                    trade[key] /= factor
+                for leg in trade["legs"]:
+                    leg["price"] /= factor
             if trade and trade["filled"]:
                 trade.update(symbol=candidate["symbol"], setup=candidate["setup"],
                              regime=result["regime"]["label"], score=candidate["score"]["total"],
                              shares=candidate["plan"]["shares"],
                              t1_hit=any(leg["reason"] in {"T1", "T2"} for leg in trade["legs"]))
-                state = candidate_state(candidate, f.at(f.index_of(day)), result["regime"])
+                signal_f = signal_universe.features[candidate["symbol"]]
+                state = candidate_state(candidate, signal_f.at(signal_f.index_of(day)), result["regime"])
                 trade["model_features"] = feature_vector(state, setup_names)
                 trade["model_p"] = model.predict(trade["model_features"])
                 if jev_client is not None:
@@ -196,24 +214,28 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
     for trade in signal_trades:
         trade["exit_after_period"] = trade["exit_date"] > end
     t1_base_rates = {
-        name: round(sum(t["t1_hit"] for t in trades) / len(trades), 4) for name, trades in sorted(by_setup.items())
+        name: round(sum(t["t1_hit"] for t in trades if t["exit_reason"] != "END_OF_DATA") /
+                    sum(t["exit_reason"] != "END_OF_DATA" for t in trades), 4)
+        for name, trades in sorted(by_setup.items())
+        if any(t["exit_reason"] != "END_OF_DATA" for t in trades)
     }
+    completed_trades = [t for t in signal_trades if t["exit_reason"] != "END_OF_DATA"]
     model_report = {
-        **evaluate_jev(signal_trades, key="model_p"),
+        **evaluate_jev(completed_trades, key="model_p"),
         "feature_version": MODEL_FEATURE_VERSION,
         "walk_forward_fits": model.fits,
         "coefficients": None,
     }
-    if len(signal_trades) >= model.min_train and len({t["t1_hit"] for t in signal_trades}) == 2:
-        final = LogisticModel.fit([t["model_features"] for t in signal_trades],
-                                  [int(t["t1_hit"]) for t in signal_trades])
+    if len(completed_trades) >= model.min_train and len({t["t1_hit"] for t in completed_trades}) == 2:
+        final = LogisticModel.fit([t["model_features"] for t in completed_trades],
+                                  [int(t["t1_hit"]) for t in completed_trades])
         model_report["coefficients"] = final.to_dict()
     for trade in signal_trades:
         trade.pop("model_features", None)
     jev = None
     if jev_client is not None:
         jev = {
-            **evaluate_jev(signal_trades),
+            **evaluate_jev(completed_trades),
             "question_bank_version": CANDIDATE_QUESTION_BANK_VERSION,
             "model_requested": getattr(jev_client, "model", "unknown"),
             "models_returned": sorted({t["jev"]["model"] for t in signal_trades
@@ -227,6 +249,7 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
         "risk_params": {k: v for k, v in risk.items() if not isinstance(v, tuple)},
         "setup_params": setup_params or {},
         "overall": _stats(signal_trades),
+        "censored_trades": sum(t["exit_reason"] == "END_OF_DATA" for t in signal_trades),
         "setups": setups_report,
         "t1_base_rates": t1_base_rates,
         "jev": jev,
@@ -243,49 +266,63 @@ def run_backtest(connection, start: str, end: str, *, setups=None, setup_params=
 
 def _portfolio(universe, days, daily_candidates, signal_trades, capital, max_positions, benchmark,
                max_per_sector: int = 0) -> dict:
+    # Submit ranked orders at the signal close; execute only on their entry session.
     trades_by_key = {(t["symbol"], t["signal_date"]): t for t in signal_trades}
-    open_positions: list[dict] = []
-    taken, cash, equity_curve = [], capital, []
-    for day in days:
-        # Close positions whose exit date has arrived.
-        still_open = []
-        for position in open_positions:
-            if position["exit_date"] <= day:
-                cash += position["shares"] * position["fill"] * (1 + position["return_pct"])
-            else:
-                still_open.append(position)
-        open_positions = still_open
-        regime, candidates = daily_candidates[day]
-        busy = {p["symbol"] for p in open_positions}
+    pending = defaultdict(list)
+    for day, (_, candidates) in daily_candidates.items():
         for candidate in candidates:
+            trade = trades_by_key.get((candidate["symbol"], day))
+            if trade is not None:
+                pending[trade["entry_date"]].append((candidate, trade))
+    open_positions = []
+    taken, cash, equity_curve = [], capital, []
+
+    def settle(position, day):
+        nonlocal cash
+        trade = position["trade"]
+        for index, leg in enumerate(trade["legs"]):
+            if index in position["settled"] or leg["date"] > day or leg["reason"] == "END_OF_DATA":
+                continue
+            fraction = leg["fraction"]
+            cost = trade["fill"] + sum(item["fraction"] * (item["price"] - trade["fill"])
+                                         for item in trade["legs"]) - trade["fill"] * (1 + trade["return_pct"])
+            cash += position["shares"] * fraction * (leg["price"] - cost)
+            position["remaining"] -= fraction
+            position["settled"].add(index)
+
+    for day in days:
+        # Opening entries use prior-close cash. Intraday exit proceeds cannot
+        # fund an opening order whose execution time is unknown from daily bars.
+        busy = {p["trade"]["symbol"] for p in open_positions}
+        for candidate, trade in pending.get(day, []):
             if len(open_positions) >= max_positions:
                 break
-            trade = trades_by_key.get((candidate["symbol"], day))
-            shares = candidate["plan"]["shares"]
-            if not trade or candidate["symbol"] in busy or not shares:
+            shares, sector = candidate["plan"]["shares"], candidate.get("sector")
+            if not shares or trade["symbol"] in busy:
                 continue
-            sector = candidate.get("sector")
             if max_per_sector and sector is not None and sum(
-                    1 for p in open_positions if p.get("sector") == sector) >= max_per_sector:
+                    p["sector"] == sector for p in open_positions) >= max_per_sector:
                 continue
             cost = shares * trade["fill"]
             if cost > cash:
                 continue
             cash -= cost
-            position = dict(trade, shares=shares, sector=sector)
-            open_positions.append(position)
-            taken.append(position)
-            busy.add(candidate["symbol"])
+            open_positions.append({"trade": trade, "shares": shares, "remaining": 1.0,
+                                   "settled": set(), "sector": sector})
+            taken.append(dict(trade, shares=shares, sector=sector))
+            busy.add(trade["symbol"])
+        for position in open_positions:
+            settle(position, day)
+        open_positions = [p for p in open_positions if p["remaining"] > 1e-9]
         marked = cash
         for position in open_positions:
-            f = universe.features[position["symbol"]]
-            i = f.index_of(day)
-            price = f.series.close[i] if i is not None and day >= position["entry_date"] else position["fill"]
-            marked += position["shares"] * price
+            trade = position["trade"]
+            series = universe.features[trade["symbol"]].series
+            index = bisect_right(series.dates, day) - 1
+            price = series.close[index] * trade.get("price_scale", 1.0) if index >= 0 else trade["fill"]
+            marked += position["shares"] * position["remaining"] * price
         equity_curve.append({"date": day, "equity": round(marked, 2)})
-    for position in open_positions:
-        cash += position["shares"] * position["fill"] * (1 + position["return_pct"])
-    final = cash if not equity_curve else equity_curve[-1]["equity"]
+    final = equity_curve[-1]["equity"] if equity_curve else capital
     peak, max_drawdown = capital, 0.0
     for point in equity_curve:
         peak = max(peak, point["equity"])
@@ -299,6 +336,7 @@ def _portfolio(universe, days, daily_candidates, signal_trades, capital, max_pos
         "max_drawdown": round(max_drawdown, 5),
         "benchmark": BENCHMARK_INDEX,
         "benchmark_return": None if bench_return is None else round(bench_return, 5),
-        "stats": _stats(taken),
+        "stats": _stats([t for t in taken if days and t["exit_date"] <= days[-1]]),
+        "open_positions": len(open_positions),
         "equity_curve": equity_curve,
     }

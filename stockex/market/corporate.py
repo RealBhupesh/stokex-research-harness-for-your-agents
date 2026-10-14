@@ -13,7 +13,7 @@ Bars before an ex-date are multiplied by the factor (prices) and divided by it
 ex-dates on or before the query's as-of date are applied.
 """
 
-from datetime import date
+from datetime import date, timedelta
 import re
 
 
@@ -53,6 +53,13 @@ def adjustment_events(series, explicit: list[dict]) -> list[dict]:
     """Explicit plus inferred adjustment events for one price series."""
     events = [dict(event, source="CORPORATE_ACTIONS") for event in explicit]
     for i in range(1, len(series)):
+        # PREV_CLOSE refers to the preceding exchange session, not necessarily
+        # the preceding imported bar. Missing sessions must not erase returns.
+        expected = date.fromisoformat(series.dates[i - 1]) + timedelta(days=1)
+        while expected.weekday() >= 5:
+            expected += timedelta(days=1)
+        if expected.isoformat() != series.dates[i]:
+            continue
         previous_close, published = series.close[i - 1], series.prev_close[i]
         if not published or not previous_close:
             continue

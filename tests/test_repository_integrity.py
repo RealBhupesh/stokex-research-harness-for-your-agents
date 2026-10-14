@@ -3,6 +3,7 @@ import pathlib
 import re
 import tempfile
 import unittest
+from stockex import __version__
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -19,12 +20,13 @@ def _is_runtime_output(path):
 
 
 def shipped_files():
-    ignored_parts = {".git", ".worktrees", ".superpowers", "__pycache__"}
+    ignored_parts = {".git", ".worktrees", ".superpowers", "__pycache__", ".venv", "build", "dist"}
     return {
         path.relative_to(ROOT).as_posix()
         for path in ROOT.rglob("*")
         if path.is_file()
         and not any(part in ignored_parts for part in path.relative_to(ROOT).parts)
+        and not any(part.endswith(".egg-info") for part in path.relative_to(ROOT).parts)
         and path.suffix != ".pyc"
         and not _is_runtime_output(path)
     }
@@ -33,7 +35,7 @@ def shipped_files():
 class ManifestTests(unittest.TestCase):
     def test_manifest_is_exact_and_versioned(self):
         manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
-        self.assertEqual(manifest["version"], "5.2.0-dev1")
+        self.assertEqual(manifest["version"], __version__)
         self.assertEqual(manifest["files"], sorted(set(manifest["files"])))
         self.assertEqual(set(manifest["files"]), shipped_files())
 

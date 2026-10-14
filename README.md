@@ -2,6 +2,20 @@
 Created 12 September 2026 and upgraded through 23 September 2026. This is a reusable research system, not a current stock recommendation or an empirically proven trading strategy.
 
 ## Start
+Install the executable harness with Python 3.10 or later:
+
+```bash
+python3 -m venv /tmp/stockex-venv
+/tmp/stockex-venv/bin/python -m pip install .
+/tmp/stockex-venv/bin/stockex --help
+```
+
+The runtime uses the Python standard library. The wheel contains the executable
+`stockex` and arithmetic helper modules; use this repository for the research
+skills, templates, reference documents and schemas. See the
+[production operations guide](docs/production-operations.md) for batch ingestion,
+data gates, verified backups, exit codes and remaining deployment requirements.
+
 Open `SKILL.md` in an assistant with web browsing and file access, or upload this complete folder/archive and instruct it to use the workflow. Read `QUICKSTART.md` for request examples. Skills supply instructions; they cannot grant market-data subscriptions or carry themselves automatically into every future conversation.
 
 > [!WARNING]
@@ -66,6 +80,8 @@ The packet command selects only records available by the supplied cutoff. The
 integrity command checks internal database consistency; a valid result does not
 prove that the supplied evidence is authentic, complete or investment-grade.
 Keep runtime databases and generated packets outside the repository.
+Use a separate SQLite file for market data: the market and evidence stores have
+different corporate-action contracts, and opening one as the other is rejected.
 
 ## Aggressive short-term mode (1–10 trading days)
 
@@ -77,18 +93,19 @@ Use the `AGGRESSIVE_SHORT_TERM` mandate ([momentum trading skill](skills/india-m
    ```bash
    python -m stockex.cli market-import market.sqlite3 downloads/*.csv
    python -m stockex.cli market-status market.sqlite3
+   python -m stockex.cli market-health market.sqlite3 --as-of 2026-09-22 --min-symbols 100 --min-history 61
    ```
 
 3. Measure which setups have actually worked, on a period that ends before the day you want to scan:
 
    ```bash
-   python -m stockex.cli backtest market.sqlite3 --from 2025-10-01 --to 2026-08-31 --capital 500000 --out scorecard.json
+   python -m stockex.cli backtest market.sqlite3 --from 2025-10-01 --to 2026-07-31 --capital 500000 --out scorecard.json
    ```
 
 4. Scan the latest session and rank candidates, recording the picks in the forward-test journal:
 
    ```bash
-   python -m stockex.cli scan market.sqlite3 --as-of 2026-09-22 --capital 500000 --risk-per-trade 0.01 --scorecard scorecard.json --journal --format md
+   python -m stockex.cli scan market.sqlite3 --as-of 2026-09-22 --capital 500000 --risk-per-trade 0.01 --scorecard scorecard.json --strict-data --min-symbols 100 --journal --format md
    ```
 
 5. As new sessions arrive, score the journal. Live results are the real test of a setup or judge:
@@ -101,6 +118,16 @@ Use the `AGGRESSIVE_SHORT_TERM` mandate ([momentum trading skill](skills/india-m
 The scanner looks for these setups: 52-week breakouts, base breakouts after volatility contraction, pullbacks in uptrends, futures long buildup and short covering, delivery accumulation, bulk/block-deal follow-through, earnings-gap drift, and relative-strength leaders in a weak market. Their exact default rules are listed in the [short-term playbook](references/short-term-playbook.md#scanner-map). A setup ranks as `PROVEN` only when its expectancy after costs is positive with statistical confidence. That means at least 30 trades, a lower confidence bound above zero from a bootstrap that resamples whole signal days with a correction for testing many setups, and positive results in most time folds. Everything else is labelled `UNPROVEN` and ranked below it. Prices are adjusted for splits and bonuses, costs include size-dependent market impact, and locked circuits block fills. A walk-forward model and, optionally, Jev act as measured trade filters. The details are in [accuracy controls](references/accuracy-controls.md). On random data the backtester measures no edge, which is the point: it only credits a setup that has earned it on your data. Add `--events events.csv` (`symbol,date,type`) to label results or other catalysts, and always verify the catalyst from the primary filing before acting.
 
 Add `--jev` to both `backtest` and `scan` to use TypeSafe AI's Jev as a meta-labeling filter. Jev judges each candidate from an anonymized state (no symbols, dates or prices). The backtest measures whether its probabilities beat each setup's base rate, and only a `PROVEN` Jev may filter or re-rank picks. See [Jev meta-labeling](references/jev-meta-labeling.md).
+
+The scorecard's signal period **and outcome data-through date** must both precede
+the scan date; overlapping or undated scorecards are rejected before any judge
+calls. `market-import` now commits all supplied files together or rolls the whole
+batch back. It records file hashes, normalized import settings and skipped-row
+counts. Changing option retention can reprocess the same file; changing its
+availability timestamp is rejected. Existing pre-v3 import ledgers remain intact,
+but their unknown settings cannot be reconstructed; the first reimport records
+the supplied settings in the new audit table. Rebuild from source files if the
+original settings are uncertain.
 
 ## Optional Jev evidence triage
 

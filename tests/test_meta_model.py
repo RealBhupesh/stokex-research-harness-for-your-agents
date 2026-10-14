@@ -53,9 +53,11 @@ class ModelScanTests(unittest.TestCase):
         for path in fx.generate_market(root, symbols=40, days=300, fo_symbols=10, seed=21):
             import_market_file(cls.db, path)
         cls.dates = trading_dates(cls.db, "2000-01-01", "2100-01-01")
-        cls.result = run_backtest(cls.db, cls.dates[200], cls.dates[-15])
-        cls.card = build_scorecard(cls.result, data_fingerprint(cls.db, cls.dates[200], cls.dates[-15]))
-        cls.day = next(d for d in reversed(cls.dates[200:]) if len(scan(cls.db, d)["candidates"]) >= 3)
+        cls.result = run_backtest(cls.db, cls.dates[200], cls.dates[-45])
+        cls.card = build_scorecard(cls.result, data_fingerprint(cls.db, cls.dates[200],
+                                                             cls.result["period"]["data_through"]))
+        cls.day = next(d for d in reversed(cls.dates[200:])
+                       if d > cls.card["period"]["data_through"] and len(scan(cls.db, d)["candidates"]) >= 3)
 
     @classmethod
     def tearDownClass(cls):
@@ -100,14 +102,14 @@ class ModelScanTests(unittest.TestCase):
             def evaluate(self, state, questions):
                 return {"model": "jev-1", "answers": {
                     "follow_through": {"type": "noul", "noul": 0.99},
-                    "catalyst_quality": {"type": "score", "score": "weak", "confidence": 0.6},
+                    "catalyst_quality": {"type": "score", "score": 1.0, "level": "weak", "confidence": 0.6},
                     "crowding_risk": {"type": "noul", "noul": 0.2},
                     "failure_mode": {"type": "choice", "choice": "none_obvious", "confidence": 0.5}}}
 
         card = copy.deepcopy(self.card)
         rates = {name: 0.5 for name in SETUPS}
         card["model"].update(status="PROVEN", brier_skill=0.02, auc=0.6, base_rates=rates)
-        card["jev"] = {"status": "PROVEN", "question_bank_version": "1", "model_requested": "jev-test",
+        card["jev"] = {"status": "PROVEN", "question_bank_version": "2", "model_requested": "jev-test",
                        "brier_skill": 0.08, "auc": 0.65, "base_rates": rates}
         report = scan(self.db, self.day, scorecard=card, jev_client=Jev())
         self.assertEqual(report["meta"]["chosen"], "JEV")

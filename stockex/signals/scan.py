@@ -9,7 +9,7 @@ from ..jev.candidates import CANDIDATE_QUESTION_BANK_VERSION, JudgeBudget, candi
 from ..market.corporate import CATALYST_CATEGORIES
 from ..market.queries import (
     announcements_between, deals_between, futures_history, index_closes, load_histories, option_chain,
-    restrictions_on, sector_map,
+    restrictions_on, sector_map, sector_maps_by_day,
 )
 from .fo import fo_features, option_context
 from .indicators import Features, compute_features
@@ -36,6 +36,7 @@ class Universe:
     notes: list = field(default_factory=list)
     sectors: dict = field(default_factory=dict)
     catalysts: dict = field(default_factory=dict)
+    sectors_by_day: dict = field(default_factory=dict)
 
 
 def _shift(day: str, days: int) -> str:
@@ -56,8 +57,10 @@ def prepare_universe(connection, as_of: str, *, start: str | None = None, lookba
     for deal in deals_between(connection, load_from, as_of):
         deals.setdefault(deal["symbol"], []).append(deal)
     vix = index_closes(connection, VIX_INDEX, as_of)
-    sectors = {symbol: sector for symbol, sector in sector_map(connection).items() if symbol in features}
-    _add_sector_strength(features, sectors)
+    sectors = {symbol: sector for symbol, sector in sector_map(connection, as_of).items() if symbol in features}
+    days = sorted({day for f in features.values() for day in f.series.dates})
+    sectors_by_day = sector_maps_by_day(connection, days)
+    _add_sector_strength(features, sectors, sectors_by_day)
     catalysts = _announcement_catalysts(connection, features, load_from, as_of)
     merged_events: dict = {}
     for symbol, by_day in catalysts.items():
@@ -70,26 +73,27 @@ def prepare_universe(connection, as_of: str, *, start: str | None = None, lookba
         features=features, fo=fo, deals=deals, events=merged_events,
         trend=benchmark_trend(benchmark) if benchmark else {},
         vix=vix_state(vix) if vix else {}, notes=notes, sectors=sectors, catalysts=catalysts,
+        sectors_by_day=sectors_by_day,
     )
 
 
-def _add_sector_strength(features: dict, sectors: dict) -> None:
+def _add_sector_strength(features: dict, sectors: dict, sectors_by_day: dict | None = None) -> None:
     """Equal-weight industry returns from the imported universe, and each stock's strength against them."""
     for window in (20, 60):
         totals: dict = {}
         for symbol, f in features.items():
-            sector = sectors.get(symbol)
-            if sector is None:
-                continue
             for day, value in zip(f.series.dates, f.columns[f"ret{window}"]):
+                sector = (sectors_by_day.get(day, {}) if sectors_by_day is not None else sectors).get(symbol)
+                if sector is None:
+                    continue
                 if value is not None:
                     bucket = totals.setdefault((sector, day), [0.0, 0])
                     bucket[0] += value
                     bucket[1] += 1
         for symbol, f in features.items():
-            sector = sectors.get(symbol)
             sector_returns, relative = [], []
             for day, value in zip(f.series.dates, f.columns[f"ret{window}"]):
+                sector = (sectors_by_day.get(day, {}) if sectors_by_day is not None else sectors).get(symbol)
                 bucket = totals.get((sector, day)) if sector else None
                 average = bucket[0] / bucket[1] if bucket and bucket[1] >= 3 else None
                 sector_returns.append(average)
@@ -164,9 +168,11 @@ def _track_record(scorecard: dict | None, setup: str, regime: str) -> dict:
         return {"status": "UNPROVEN", "reason": "Setup not in scorecard or version changed"}
     record = entry.get("by_regime", {}).get(regime) or entry.get("overall", {})
     trades, expectancy = record.get("trades", 0), record.get("expectancy_r")
-    # Scorecards store a statistically tested status; the plain rule is a fallback for hand-made ones.
-    status = record.get("status") or (
-        "PROVEN" if trades >= MIN_PROVEN_TRADES and expectancy is not None and expectancy > 0 else "UNPROVEN")
+    # A positive mean alone is not statistical proof.
+    status = record.get("status", "UNPROVEN")
+    if status == "PROVEN" and (trades < MIN_PROVEN_TRADES or expectancy is None or expectancy <= 0
+                               or (record.get("expectancy_lower_bound") or 0) <= 0):
+        status = "UNPROVEN"
     return {"status": status, "trades": trades, "hit_rate": record.get("hit_rate"),
             "expectancy_r": expectancy, "expectancy_lower_bound": record.get("expectancy_lower_bound"),
             "basis": regime if regime in entry.get("by_regime", {}) else "overall"}
@@ -255,7 +261,7 @@ def evaluate_day(universe: Universe, day: str, *, setups=None, setup_params=None
             "track_record": track,
             "score": score,
             "series": f.series.series[i],
-            "sector": universe.sectors.get(symbol),
+            "sector": universe.sectors_by_day.get(day, universe.sectors).get(symbol),
             "sector_strength": _rounded({"rs_sector20": bar.get("rs_sector20"), "rs_sector60": bar.get("rs_sector60")}),
         })
     candidates.sort(key=lambda c: (c["track_record"]["status"] == "PROVEN", c["score"]["total"]), reverse=True)
@@ -391,6 +397,16 @@ def apply_meta(universe: Universe, day: str, result: dict, *, scorecard=None, cl
 
 def scan(connection, as_of: str, *, setups=None, setup_params=None, risk_params=None, scorecard=None,
          events=None, top: int = 10, jev_client=None, jev_cache=None, live: dict | None = None) -> dict:
+    if top < 1:
+        raise ValueError("top must be positive")
+    # Reject before evaluating candidates or calling any paid judge.
+    if scorecard is not None:
+        period = scorecard.get("period", {})
+        boundaries = [period.get("to"), period.get("data_through")]
+        if not all(isinstance(value, str) and value for value in boundaries):
+            raise ValueError("Scorecard must specify period.to and period.data_through")
+        if max(date.fromisoformat(value) for value in boundaries) >= date.fromisoformat(as_of):
+            raise ValueError("Scorecard outcomes overlap the scan date; use an out-of-sample scorecard")
     universe = prepare_universe(connection, as_of, events=events)
     restrictions = restrictions_on(connection, as_of, through=_shift(as_of, 4))
     result = evaluate_day(universe, as_of, setups=setups, setup_params=setup_params,
@@ -418,8 +434,6 @@ def scan(connection, as_of: str, *, setups=None, setup_params=None, risk_params=
         notes.append(f"No bars on {as_of}; is it a trading day with imported data?")
     if scorecard is None:
         notes.append("No scorecard supplied: setup edge is unmeasured (run `backtest` first)")
-    elif max(scorecard.get("period", {}).get("to", ""), scorecard.get("period", {}).get("data_through", "")) >= as_of:
-        notes.append("Scorecard period overlaps the scan date; its track record is in-sample")
     if meta is not None:
         if meta["chosen"]:
             proof = meta["proofs"][meta["chosen"]]

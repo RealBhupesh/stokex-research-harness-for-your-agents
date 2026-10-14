@@ -42,6 +42,19 @@ class StatisticsTests(unittest.TestCase):
         result = assess(trades([1.0] * (MIN_TRADES - 1)), 1, "few")
         self.assertTrue(result["reasons"][0].startswith("Only"))
 
+    def test_two_busy_sessions_cannot_prove_temporal_stability(self):
+        result = assess(trades([1.0] * 40, days_per_trade=20), 1, "two-days")
+        self.assertEqual(result["status"], "UNPROVEN")
+        self.assertIn("distinct signal days", " ".join(result["reasons"]))
+        folds = result["fold_stability"]["folds"]
+        self.assertTrue(all(a["to"] < b["from"] for a, b in zip(folds, folds[1:])))
+
+    def test_censored_marks_are_excluded_from_evidence(self):
+        sample = trades([1.0] * 80)
+        for trade in sample:
+            trade["exit_reason"] = "END_OF_DATA"
+        self.assertEqual(assess(sample, 1, "censored")["status"], "UNPROVEN")
+
     def test_bootstrap_is_deterministic(self):
         sample = trades([1.0, -0.5, 0.3] * 20)
         self.assertEqual(cluster_bootstrap_lower_bound(sample, 0.01, label="x"),

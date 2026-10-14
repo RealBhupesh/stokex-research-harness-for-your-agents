@@ -11,8 +11,8 @@ from ..store.records import canonical_json
 from .client import JevError
 
 
-REPORT_SCHEMA_VERSION = 1
-QUESTION_BANK_VERSION = "1"
+REPORT_SCHEMA_VERSION = 2
+QUESTION_BANK_VERSION = "2"
 DEFAULT_CONFIDENCE_FLOOR = 0.7
 
 SOURCE_CLASSES = {
@@ -95,8 +95,8 @@ def _certainty(answer: dict) -> float | None:
     """Confidence when Jev returns it, otherwise the probability of the selected option."""
     if "confidence" in answer:
         return answer["confidence"]
-    selected = answer.get(answer["type"])
-    probabilities = answer.get("probabilities") or {}
+    selected = answer.get("level") if answer["type"] == "score" else answer.get("choice")
+    probabilities = (answer.get("level_probabilities") if answer["type"] == "score" else answer.get("probabilities")) or {}
     return probabilities.get(selected)
 
 
@@ -108,7 +108,9 @@ def _source_flags(source: dict, answers: dict, floor: float) -> list[dict]:
     flags = []
     for question_id in ("source_class", "claim_type", "materiality"):
         certainty = _certainty(answers[question_id])
-        if certainty is None or certainty < floor:
+        if certainty is None or certainty < floor or (
+            answers[question_id]["type"] == "score" and answers[question_id].get("level") is None
+        ):
             flags.append({"code": "LOW_CONFIDENCE", "question": question_id, "certainty": certainty})
     low = {flag["question"] for flag in flags}
 
@@ -128,13 +130,13 @@ def _source_flags(source: dict, answers: dict, floor: float) -> list[dict]:
 
     if (
         not {"claim_type", "materiality"} & low
-        and answers["materiality"]["score"] in {"material", "controlling"}
+        and answers["materiality"]["level"] in {"material", "controlling"}
         and answers["claim_type"]["choice"] != "verified_fact"
     ):
         flags.append({
             "code": "CLAIM_NOT_FACT",
             "claim_type": answers["claim_type"]["choice"],
-            "materiality": answers["materiality"]["score"],
+            "materiality": answers["materiality"]["level"],
         })
 
     if answers["restatement_or_amendment"]["noul"] >= floor:

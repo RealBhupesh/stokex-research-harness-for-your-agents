@@ -59,7 +59,7 @@ class MarketCliTests(unittest.TestCase):
         status = self.call(["market-status", str(self.database)])[1]
         scorecard = self.root / "scorecard.json"
         code, summary, error = self.call([
-            "backtest", str(self.database), "--from", "2026-03-02", "--to", "2026-04-30",
+            "backtest", str(self.database), "--from", "2026-03-02", "--to", "2026-03-31",
             "--capital", "500000", "--out", str(scorecard),
         ])
         self.assertEqual((code, error), (0, None))
@@ -112,7 +112,7 @@ class MarketCliTests(unittest.TestCase):
                 Stub.calls += 1
                 return {"model": "jev-1.13.0", "answers": {
                     "follow_through": {"type": "noul", "noul": 0.6},
-                    "catalyst_quality": {"type": "score", "score": "weak", "confidence": 0.6},
+                    "catalyst_quality": {"type": "score", "score": 1.0, "level": "weak", "confidence": 0.6},
                     "crowding_risk": {"type": "noul", "noul": 0.7},
                     "failure_mode": {"type": "choice", "choice": "weak_volume", "confidence": 0.5},
                 }}

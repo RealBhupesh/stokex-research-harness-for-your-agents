@@ -3,9 +3,11 @@
 import json
 import math
 import os
+import time
 from typing import Callable
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 
 
 DEFAULT_BASE_URL = "https://api.typesafe.ai/v1/systemone"
@@ -13,7 +15,9 @@ DEFAULT_MODEL = "jev-latest"
 API_KEY_ENV = "TYPESAFE_API_KEY"
 QUESTION_TYPES = {"noul", "choice", "score"}
 MAX_OPTIONS = 255
-_RETRY_STATUSES = {429, 500, 502, 503, 504}
+MAX_SCORE_LEVELS = 10
+_RETRY_STATUSES = {429, 500, 502, 503, 504, 529}
+MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
 Transport = Callable[[str, dict, bytes, float], tuple[int, bytes]]
 
@@ -36,20 +40,33 @@ class JevResponseError(JevError):
     pass
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Never forward a bearer credential to a redirected endpoint.
+        return None
+
+
+def _bounded_read(response):
+    raw = response.read(MAX_RESPONSE_BYTES + 1)
+    if len(raw) > MAX_RESPONSE_BYTES:
+        raise JevResponseError("JEV_RESPONSE_TOO_LARGE", "Jev response exceeded the size limit")
+    return raw
+
+
 def _urllib_transport(url: str, headers: dict, body: bytes, timeout: float) -> tuple[int, bytes]:
     request = urllib.request.Request(url, data=body, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return response.status, response.read()
+        opener = urllib.request.build_opener(_NoRedirect())
+        with opener.open(request, timeout=timeout) as response:
+            return response.status, _bounded_read(response)
     except urllib.error.HTTPError as error:
-        return error.code, error.read()
+        with error:
+            return error.code, _bounded_read(error)
 
 
 def _score_payload(spec: dict) -> dict:
-    # Score levels are sent in ``criteria`` like choice options, ordered lowest
-    # to highest. Confirm the field name against docs.typesafe.ai/api before
-    # relying on live score answers.
-    return {"type": "score", "instructions": spec["instructions"], "criteria": dict(spec["criteria"])}
+    # Research rubrics use ordered labels; the provider requires an ordered array.
+    return {"type": "score", "instructions": spec["instructions"], "criteria": list(spec["criteria"].values())}
 
 
 def validate_questions(questions: dict) -> dict:
@@ -73,12 +90,12 @@ def validate_questions(questions: dict) -> dict:
         criteria = spec.get("criteria")
         if (
             not isinstance(criteria, dict)
-            or not 2 <= len(criteria) <= MAX_OPTIONS
+            or not 2 <= len(criteria) <= (MAX_SCORE_LEVELS if kind == "score" else MAX_OPTIONS)
             or not all(isinstance(key, str) and key and isinstance(value, str) and value.strip()
                        for key, value in criteria.items())
         ):
             raise JevRequestError(
-                "JEV_QUESTIONS_INVALID", f"{path}.criteria needs 2-{MAX_OPTIONS} described options"
+                "JEV_QUESTIONS_INVALID", f"{path}.criteria needs 2-{MAX_SCORE_LEVELS if kind == 'score' else MAX_OPTIONS} described options"
             )
         if kind == "choice":
             payload[question_id] = {"type": "choice", "instructions": instructions, "criteria": dict(criteria)}
@@ -95,27 +112,55 @@ def _probability(value: object) -> bool:
 
 
 def _validate_answer(question_id: str, spec: dict, answer: object) -> dict:
+    """Validate the wire contract and add an explicit, auditable score adapter.
+
+    ``score`` remains the numeric expected level. ``level`` is the uniquely
+    most probable rubric label (None on ties), never a rounded expected value.
+    ``level_probabilities`` maps the distribution to the research rubric labels.
+    Contract: https://docs.typesafe.ai/api (verified 2026-10-14).
+    """
     path = f"answers.{question_id}"
     if not isinstance(answer, dict) or answer.get("type") != spec["type"]:
         raise JevResponseError("JEV_RESPONSE_INVALID", f"{path} is missing or has the wrong type")
     if spec["type"] == "noul":
         if not _probability(answer.get("noul")):
             raise JevResponseError("JEV_RESPONSE_INVALID", f"{path}.noul must be a probability")
-        return answer
-    options = set(spec["criteria"])
-    selected = answer.get(spec["type"])
-    if selected not in options:
-        raise JevResponseError("JEV_RESPONSE_INVALID", f"{path}.{spec['type']} must be a requested option")
+        return dict(answer)
+    labels = list(spec["criteria"])
+    options = set(labels) if spec["type"] == "choice" else {str(i) for i in range(len(labels))}
     probabilities = answer.get("probabilities")
-    if probabilities is not None and (
+    if (
         not isinstance(probabilities, dict)
-        or not set(probabilities) <= options
+        or set(probabilities) != options
         or not all(_probability(value) for value in probabilities.values())
+        or not math.isclose(sum(probabilities.values()), 1.0, rel_tol=0, abs_tol=1e-6)
     ):
-        raise JevResponseError("JEV_RESPONSE_INVALID", f"{path}.probabilities is malformed")
-    if "confidence" in answer and not _probability(answer["confidence"]):
+        raise JevResponseError("JEV_RESPONSE_INVALID", f"{path}.probabilities must cover every option and sum to 1")
+    if not _probability(answer.get("confidence")):
         raise JevResponseError("JEV_RESPONSE_INVALID", f"{path}.confidence must be a probability")
-    return answer
+    if spec["type"] == "choice":
+        selected = answer.get("choice")
+        if not isinstance(selected, str) or selected not in options:
+            raise JevResponseError("JEV_RESPONSE_INVALID", f"{path}.choice must be a requested option")
+        if probabilities[selected] < max(probabilities.values()):
+            raise JevResponseError("JEV_RESPONSE_INVALID", f"{path}.choice must be a highest-probability option")
+        return dict(answer)
+    legend = {str(i): spec["criteria"][label] for i, label in enumerate(labels)}
+    if answer.get("legend") != legend:
+        raise JevResponseError("JEV_RESPONSE_INVALID", f"{path}.legend must match the requested ordered levels")
+    score = answer.get("score")
+    expected = sum(int(index) * probability for index, probability in probabilities.items())
+    if (not isinstance(score, (int, float)) or isinstance(score, bool)
+            or not math.isfinite(score) or not 0 <= score <= len(labels) - 1
+            or not math.isclose(score, expected, rel_tol=0, abs_tol=1e-6)):
+        raise JevResponseError("JEV_RESPONSE_INVALID", f"{path}.score must equal the probability-weighted level")
+    maximum = max(probabilities.values())
+    modes = [index for index, probability in probabilities.items() if probability == maximum]
+    return {
+        **answer,
+        "level": labels[int(modes[0])] if len(modes) == 1 else None,
+        "level_probabilities": {label: probabilities[str(i)] for i, label in enumerate(labels)},
+    }
 
 
 class JevClient:
@@ -129,12 +174,19 @@ class JevClient:
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = 30.0,
         transport: Transport | None = None,
+        sleeper: Callable[[float], None] = time.sleep,
     ):
         self.api_key = api_key if api_key is not None else os.environ.get(API_KEY_ENV)
         if not self.api_key:
             raise JevConfigError("JEV_CONFIG_MISSING", f"Set {API_KEY_ENV} to call Jev")
+        endpoint = urlsplit(base_url)
+        if endpoint.scheme != "https" or not endpoint.hostname or endpoint.username or endpoint.password:
+            raise JevConfigError("JEV_CONFIG_INVALID", "Jev endpoint must be HTTPS without embedded credentials")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise JevConfigError("JEV_CONFIG_INVALID", "Jev timeout must be finite and positive")
         self.model, self.base_url, self.timeout = model, base_url, timeout
         self._transport = transport or _urllib_transport
+        self._sleeper = sleeper
 
     def evaluate(self, state: object, questions: dict) -> dict:
         payload = validate_questions(questions)
@@ -149,7 +201,7 @@ class JevClient:
         }
         status, raw = self._send(headers, body)
         if status != 200:
-            raise JevRequestError("JEV_HTTP_ERROR", f"Jev returned HTTP {status}: {raw[:200]!r}")
+            raise JevRequestError("JEV_HTTP_ERROR", f"Jev returned HTTP {status}")
         try:
             response = json.loads(raw)
         except (ValueError, UnicodeDecodeError) as error:
@@ -161,18 +213,20 @@ class JevClient:
             "model": response.get("model") if isinstance(response.get("model"), str) else self.model,
             "answers": {
                 question_id: _validate_answer(question_id, spec, answers.get(question_id))
-                for question_id, spec in payload.items()
+                for question_id, spec in questions.items()
             },
             "usage": response.get("usage") if isinstance(response.get("usage"), dict) else {},
         }
 
     def _send(self, headers: dict, body: bytes) -> tuple[int, bytes]:
         for attempt in range(2):
+            if attempt:
+                self._sleeper(0.25)
             try:
                 status, raw = self._transport(self.base_url, headers, body, self.timeout)
             except OSError as error:
                 if attempt:
-                    raise JevRequestError("JEV_HTTP_ERROR", f"Jev request failed: {error}") from error
+                    raise JevRequestError("JEV_HTTP_ERROR", "Jev request failed after retry") from error
                 continue
             if status not in _RETRY_STATUSES or attempt:
                 return status, raw

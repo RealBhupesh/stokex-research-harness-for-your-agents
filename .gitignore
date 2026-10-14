@@ -8,3 +8,11 @@ evidence-packet-*.json
 stockex-output/
 .superpowers/
 scorecard*.json
+*.sqlite3-wal
+*.sqlite3-shm
+*.db-wal
+*.db-shm
+.venv/
+build/
+dist/
+*.egg-info/

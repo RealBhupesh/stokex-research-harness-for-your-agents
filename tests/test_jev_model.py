@@ -21,7 +21,7 @@ from stockex.signals.setups import SETUPS
 def answers(p):
     return {
         "follow_through": {"type": "noul", "noul": p},
-        "catalyst_quality": {"type": "score", "score": "moderate", "confidence": 0.7},
+        "catalyst_quality": {"type": "score", "score": 2.0, "level": "moderate", "confidence": 0.7},
         "crowding_risk": {"type": "noul", "noul": 0.3},
         "failure_mode": {"type": "choice", "choice": "none_obvious", "confidence": 0.5},
     }
@@ -53,7 +53,8 @@ class SequenceClient:
 
 
 def proven_scorecard(base_rate=0.5):
-    return {"jev": {"status": "PROVEN", "question_bank_version": CANDIDATE_QUESTION_BANK_VERSION,
+    return {"period": {"to": "2020-01-01", "data_through": "2020-01-15"},
+            "jev": {"status": "PROVEN", "question_bank_version": CANDIDATE_QUESTION_BANK_VERSION,
                     "model_requested": "jev-test", "brier_skill": 0.1, "auc": 0.62,
                     "base_rates": {name: base_rate for name in SETUPS}}}
 

@@ -1,3 +1,3 @@
 """STOCKEX deterministic research infrastructure."""
 
-__version__ = "4.0.0-dev1"
+__version__ = "5.2.0.dev2"

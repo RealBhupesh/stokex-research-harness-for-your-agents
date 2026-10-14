@@ -12,7 +12,7 @@ from ..store.records import canonical_json
 from .client import JevError
 
 
-CANDIDATE_QUESTION_BANK_VERSION = "1"
+CANDIDATE_QUESTION_BANK_VERSION = "2"
 
 CANDIDATE_QUESTIONS = {
     "follow_through": {
@@ -140,7 +140,8 @@ def _summary(answers: dict, model: str, sha: str, cached: bool) -> dict:
     return {
         "status": "JUDGED",
         "follow_through": answers["follow_through"]["noul"],
-        "catalyst_quality": answers["catalyst_quality"]["score"],
+        "catalyst_quality": answers["catalyst_quality"]["level"],
+        "catalyst_quality_score": answers["catalyst_quality"]["score"],
         "crowding_risk": answers["crowding_risk"]["noul"],
         "failure_mode": answers["failure_mode"]["choice"],
         "model": model,

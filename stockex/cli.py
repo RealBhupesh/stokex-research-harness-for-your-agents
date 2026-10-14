@@ -5,6 +5,7 @@ import csv
 from dataclasses import asdict
 from datetime import date
 import json
+import math
 from pathlib import Path
 import sqlite3
 import sys
@@ -15,7 +16,9 @@ from .jev.announcements import classify_with_jev
 from .jev.cache import JevCache
 from .jev.client import DEFAULT_MODEL, JevClient, JevError
 from .jev.triage import DEFAULT_CONFIDENCE_FLOOR, triage_packet
-from .market.importers import KINDS, MarketImportError, import_market_file, parse_date
+from .market.importers import KINDS, MarketImportError, import_market_batch, parse_date
+from .market.health import market_health
+from .operations import atomic_json, backup_database
 from .market.queries import coverage
 from .market.schema import open_market_db
 from .signals.scan import scan, to_markdown
@@ -63,6 +66,16 @@ def _parser() -> argparse.ArgumentParser:
     integrity = commands.add_parser("integrity", help="check store integrity")
     integrity.add_argument("database", type=Path)
 
+    backup = commands.add_parser("backup", help="create a verified SQLite snapshot without overwriting")
+    backup.add_argument("database", type=Path)
+    backup.add_argument("destination", type=Path)
+
+    health = commands.add_parser("market-health", help="check data gates for a requested session")
+    health.add_argument("database", type=Path)
+    health.add_argument("--as-of", required=True)
+    health.add_argument("--min-symbols", type=int, default=1)
+    health.add_argument("--min-history", type=int, default=60)
+
     jev = commands.add_parser("jev-triage", help="advisory Jev triage of a cutoff evidence packet")
     jev.add_argument("database", type=Path)
     jev.add_argument("security_id")
@@ -99,6 +112,8 @@ def _parser() -> argparse.ArgumentParser:
     scanner.add_argument("--format", choices=("json", "md"), default="json")
     scanner.add_argument("--journal", action="store_true",
                          help="record the ranked picks in the forward-test journal")
+    scanner.add_argument("--strict-data", action="store_true", help="block scans that fail market-health")
+    scanner.add_argument("--min-symbols", type=int, default=1)
 
     journal_update = commands.add_parser("journal-update", help="evaluate journal picks with newer data")
     journal_update.add_argument("database", type=Path)
@@ -141,8 +156,10 @@ def _risk_params(args) -> dict:
                       ("min_reward_risk", "min_reward_risk"), ("cost_bps", "round_trip_cost_bps")):
         value = getattr(args, name)
         if value is not None:
-            if value < 0:
-                raise ValueError(f"--{name.replace('_', '-')} must be non-negative")
+            positive = name in {"capital", "min_traded_value", "min_reward_risk"}
+            if not math.isfinite(value) or value < 0 or (positive and value == 0):
+                raise ValueError(f"--{name.replace('_', '-')} must be finite and "
+                                 + ("positive" if positive else "non-negative"))
             params[key] = value
     return params
 
@@ -207,6 +224,8 @@ def _error_payload(code: str, message: str, **details: object) -> dict:
 
 
 def _run(args: argparse.Namespace) -> object:
+    if args.command == "backup":
+        return backup_database(args.database, args.destination)
     if args.command == "init":
         with PointInTimeStore.open(args.database) as store:
             return {
@@ -218,7 +237,7 @@ def _run(args: argparse.Namespace) -> object:
         with PointInTimeStore.open(args.database) as store:
             return import_jsonl(store, args.source)
 
-    if args.command in {"market-import", "market-status", "scan", "backtest", "announcements-classify",
+    if args.command in {"market-import", "market-status", "market-health", "scan", "backtest", "announcements-classify",
                         "journal-update", "journal-report"}:
         return _run_market(args)
 
@@ -247,14 +266,14 @@ def _run_market(args: argparse.Namespace) -> object:
     connection = open_market_db(args.database)
     try:
         if args.command == "market-import":
-            return [
-                import_market_file(connection, path, kind=args.kind,
+            return import_market_batch(connection, args.files, kind=args.kind,
                                    option_expiries={"none": 0, "near": 1, "near2": 2, "all": None}[args.options],
                                    available_at=args.available_at, index_name=args.index_name)
-                for path in args.files
-            ]
         if args.command == "market-status":
             return coverage(connection)
+        if args.command == "market-health":
+            return market_health(connection, _check_date(args.as_of, "--as-of"),
+                                 min_symbols=args.min_symbols, min_history=args.min_history)
         if args.command == "journal-update":
             return journal.update_outcomes(connection, _check_date(args.as_of, "--as-of"))
         if args.command == "journal-report":
@@ -267,6 +286,13 @@ def _run_market(args: argparse.Namespace) -> object:
         jev_cache = JevCache(connection) if args.jev else None
         if args.command == "scan":
             as_of = _check_date(args.as_of, "--as-of")
+            if args.top < 1:
+                raise ValueError("--top must be positive")
+            health = market_health(connection, as_of, min_symbols=args.min_symbols, min_history=61) \
+                if args.strict_data else None
+            if health and health["status"] == "BLOCKED":
+                return {"as_of": as_of, "status": "BLOCKED", "data_health": health,
+                        "candidates": [], "candidates_total": 0, "journal_recorded": 0}
             scorecard = load_scorecard(args.scorecard) if args.scorecard else None
             report = scan(connection, as_of, setups=args.setups, risk_params=_risk_params(args),
                           scorecard=scorecard, events=events, top=args.top,
@@ -274,10 +300,14 @@ def _run_market(args: argparse.Namespace) -> object:
                           live=journal.live_records(connection))
             if args.journal:
                 report["journal_recorded"] = journal.record_scan(connection, report)
+            if health:
+                report["data_health"] = health
             return to_markdown(report) if args.format == "md" else report
         start, end = _check_date(args.start, "--from"), _check_date(args.end, "--to")
         if start > end:
             raise ValueError("--from must not be after --to")
+        if args.max_positions < 1:
+            raise ValueError("--max-positions must be positive")
         risk = _risk_params(args)
         result = run_backtest(connection, start, end, setups=args.setups, risk_params=risk, events=events,
                               capital=risk.pop("capital", None) or 1_000_000, max_positions=args.max_positions,
@@ -285,8 +315,7 @@ def _run_market(args: argparse.Namespace) -> object:
                               jev_max_calls=None if args.jev_max_calls < 0 else args.jev_max_calls)
         scorecard = build_scorecard(result, data_fingerprint(connection, start, result["period"]["data_through"]))
         if args.out:
-            args.out.write_text(json.dumps(scorecard, indent=2, sort_keys=True, allow_nan=False) + "\n",
-                                encoding="utf-8")
+            atomic_json(args.out, scorecard)
         summary = {key: result[key] for key in
                    ("period", "capital", "max_positions", "overall", "setups", "t1_base_rates", "jev", "notes")}
         summary["portfolio"] = {k: v for k, v in result["portfolio"].items() if k != "equity_curve"}
@@ -305,6 +334,8 @@ def main(argv: list[str] | None = None) -> int:
         args = _parser().parse_args(argv)
         output = _run(args)
         print(output if isinstance(output, str) else _json_output(output))
+        if isinstance(output, dict) and output.get("status") == "BLOCKED":
+            return 3
         return 0
     except ImportFailure as error:
         print(_json_output(asdict(error)), file=sys.stderr)

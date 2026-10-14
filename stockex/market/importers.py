@@ -27,11 +27,13 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 import hashlib
 import io
+import json
 from pathlib import Path
 import re
 import sqlite3
 
 from ..store.records import StoreValidationError, normalize_timestamp
+from ..operations import atomic_transaction
 from .corporate import classify_announcement, parse_purpose
 
 
@@ -108,8 +110,31 @@ def _number(value: str | None, *, integer: bool = False, required: bool = False,
 
 def _available_at(trade_date: str, override: str | None) -> str:
     if override is not None:
+        if override[:10] < trade_date:
+            raise _RowError("AVAILABILITY_BEFORE_TRADE", "Market observation cannot be available before its trade date")
         return override
     return f"{trade_date}T{DEFAULT_AVAILABLE_TIME_UTC}Z"
+
+
+def _immutable_insert(connection, table: str, keys: tuple[str, ...], values: tuple) -> None:
+    """Reject revised natural keys until an explicit vintage model is supplied."""
+    columns = [row[1] for row in connection.execute(f"PRAGMA table_info({table})")]
+    record = dict(zip(columns, values))
+    existing = connection.execute(
+        f"SELECT * FROM {table} WHERE " + " AND ".join(f"{key} = ?" for key in keys),
+        [record[key] for key in keys],
+    ).fetchone()
+    if existing is not None:
+        if tuple(existing) != tuple(values):
+            raise _RowError("MARKET_DATA_CONFLICT", f"Conflicting {table} record; preserve separate data vintages")
+        return
+    connection.execute(
+        f"INSERT INTO {table} VALUES ({', '.join('?' for _ in values)})", values
+    )
+
+
+def _reference_available_at(context) -> str:
+    return context.available_at or context.imported_at
 
 
 class _Rows:
@@ -122,6 +147,9 @@ class _Rows:
         except StopIteration:
             raise _RowError("FILE_EMPTY", "File has no header row") from None
         self.header = [_key(column) for column in header]
+        names = [name for name in self.header if name]
+        if len(names) != len(set(names)):
+            raise _RowError("COLUMNS_DUPLICATE", "Duplicate column names after normalization")
         self.index = {name: position for position, name in enumerate(self.header) if name}
         self.reader = reader
 
@@ -281,8 +309,8 @@ def _import_index(connection, rows: _Rows, context) -> None:
         if close is None or close <= 0:
             context.skip("CLOSE_MISSING")
             continue
-        connection.execute(
-            "INSERT OR REPLACE INTO index_bars VALUES (?, ?, ?, ?, ?, ?, ?)",
+        _immutable_insert(
+            connection, "index_bars", ("index_name", "trade_date"),
             (
                 rows.get(row, "Index Name").strip().upper(), trade_date,
                 _number(rows.get(row, "Open Index Value"), name="Open Index Value"),
@@ -334,10 +362,8 @@ def _import_fo_ban(connection, text: str, context) -> None:
         if not cells:
             continue
         symbol = cells[-1].upper()
-        connection.execute(
-            "INSERT OR REPLACE INTO restrictions VALUES ('FO_BAN', ?, NULL, ?, ?)",
-            (symbol, trade_date, trade_date),
-        )
+        _immutable_insert(connection, "restrictions", ("list_name", "symbol", "from_date"),
+                          ("FO_BAN", symbol, None, trade_date, trade_date, _reference_available_at(context)))
         context.written += 1
 
 
@@ -346,13 +372,13 @@ def _import_restrictions(connection, rows: _Rows, context) -> None:
     for line, row in rows:
         context.line = line
         to_date = rows.get(row, "to_date")
-        connection.execute(
-            "INSERT OR REPLACE INTO restrictions VALUES (?, ?, ?, ?, ?)",
+        _immutable_insert(
+            connection, "restrictions", ("list_name", "symbol", "from_date"),
             (
                 rows.get(row, "list").upper(), rows.get(row, "symbol").upper(),
                 (rows.get(row, "stage") or None),
                 parse_date(rows.get(row, "from_date")),
-                parse_date(to_date) if to_date else None,
+                parse_date(to_date) if to_date else None, _reference_available_at(context),
             ),
         )
         context.written += 1
@@ -375,9 +401,10 @@ def _import_corporate_actions(connection, rows: _Rows, context) -> None:
             context.skip("PURPOSE_NOT_PRICE_ADJUSTING")
             continue
         kind, factor = parsed
-        connection.execute(
-            "INSERT OR REPLACE INTO corporate_actions VALUES (?, ?, ?, ?, ?)",
-            (rows.get(row, "SYMBOL").upper(), parse_date(ex_date), kind, factor, rows.get(row, "PURPOSE")),
+        _immutable_insert(
+            connection, "corporate_actions", ("symbol", "ex_date", "kind"),
+            (rows.get(row, "SYMBOL").upper(), parse_date(ex_date), kind, factor,
+             rows.get(row, "PURPOSE"), _reference_available_at(context)),
         )
         context.written += 1
 
@@ -392,8 +419,8 @@ def _import_index_members(connection, rows: _Rows, context) -> None:
     as_of = (context.available_at or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))[:10]
     for line, row in rows:
         context.line = line
-        connection.execute(
-            "INSERT OR REPLACE INTO index_members VALUES (?, ?, ?, ?, ?)",
+        _immutable_insert(
+            connection, "index_members", ("index_name", "symbol", "as_of_date"),
             (context.index_name, rows.get(row, "Symbol").upper(), (rows.get(row, "Industry") or None),
              rows.get(row, "ISIN Code", "ISIN") or None, as_of),
         )
@@ -429,6 +456,7 @@ def _import_announcements(connection, rows: _Rows, context) -> None:
 class _Context:
     def __init__(self, series, option_expiries, available_at):
         self.series, self.option_expiries, self.available_at = series, option_expiries, available_at
+        self.imported_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         self.line = 1
         self.written = 0
         self.skipped = Counter()
@@ -444,6 +472,20 @@ class _Context:
             self.skip("VOLUME_NEGATIVE")
             return
         bar["available_at"] = _available_at(bar["trade_date"], self.available_at)
+        existing = connection.execute(
+            "SELECT * FROM bars "
+            "WHERE symbol = ? AND series = ? AND trade_date = ?",
+            (bar["symbol"], bar["series"], bar["trade_date"]),
+        ).fetchone()
+        if existing is not None:
+            if any(existing[name] != bar[name] for name in ("open", "high", "low", "close", "volume")):
+                raise _RowError("BAR_CONFLICT", "Existing OHLCV differs; resolve the source conflict in a fresh database")
+            for name in ("delivery_qty", "delivery_pct", "isin", "prev_close"):
+                if existing[name] is not None and bar[name] is not None and existing[name] != bar[name]:
+                    raise _RowError("BAR_CONFLICT", f"Conflicting bar {name}; preserve separate data vintages")
+            if existing["available_at"] != bar["available_at"]:
+                raise _RowError("BAR_AVAILABILITY_CONFLICT", "Enrichment cannot change a bar's availability; "
+                                "separate data vintages instead of merging different cutoffs")
         connection.execute(
             """
             INSERT INTO bars (symbol, series, trade_date, open, high, low, close, prev_close, volume,
@@ -464,15 +506,9 @@ class _Context:
 
     def fo(self, connection, record: dict) -> None:
         record["available_at"] = _available_at(record["trade_date"], self.available_at)
-        connection.execute(
-            """
-            INSERT OR REPLACE INTO fo_bars (symbol, instrument, expiry, strike, trade_date, open, high, low,
-                close, settle, underlying, open_interest, oi_change, volume, is_index, available_at)
-            VALUES (:symbol, :instrument, :expiry, :strike, :trade_date, :open, :high, :low, :close, :settle,
-                :underlying, :open_interest, :oi_change, :volume, :is_index, :available_at)
-            """,
-            record,
-        )
+        columns = [row[1] for row in connection.execute("PRAGMA table_info(fo_bars)")]
+        _immutable_insert(connection, "fo_bars", ("symbol", "instrument", "expiry", "strike", "trade_date"),
+                          tuple(record[name] for name in columns))
         self.written += 1
 
 
@@ -516,20 +552,39 @@ def import_market_file(
     except (_RowError, StoreValidationError) as error:
         raise MarketImportError(str(path), 1, error.code, error.message) from None
 
-    if connection.execute("SELECT 1 FROM market_imports WHERE sha256 = ?", (digest,)).fetchone():
-        return {"path": str(path), "kind": detected, "status": "unchanged", "written": 0, "skipped": {}}
-
     context = _Context(frozenset(s.upper() for s in series), option_expiries, available_at)
     context.index_name = (index_name or _index_name_from(path)).upper()
+    if option_expiries is not None and (isinstance(option_expiries, bool)
+                                       or not isinstance(option_expiries, int) or option_expiries < 0):
+        raise ValueError("option_expiries must be a non-negative integer or None")
+    options_json = json.dumps({"series": sorted(context.series), "option_expiries": option_expiries,
+                               "available_at": available_at, "index_name": context.index_name},
+                              sort_keys=True)
+    run_id = hashlib.sha256((digest + detected + options_json).encode()).hexdigest()
     try:
-        with connection:
+        with atomic_transaction(connection):
+            if connection.execute("SELECT 1 FROM market_import_runs WHERE run_id = ?", (run_id,)).fetchone():
+                return {"path": str(path), "kind": detected, "status": "unchanged", "written": 0,
+                        "skipped": {}, "sha256": digest, "run_id": run_id}
+            previous = connection.execute(
+                "SELECT options_json FROM market_import_runs WHERE sha256 = ?", (digest,)
+            ).fetchall()
+            if any(json.loads(row[0])["available_at"] != available_at for row in previous):
+                raise _RowError("IMPORT_AVAILABILITY_CONFLICT",
+                                "Do not change availability of previously imported content; use a fresh database")
             if detected == "fo-ban":
                 _import_fo_ban(connection, text, context)
             else:
                 _IMPORTERS[detected](connection, _Rows(text), context)
             connection.execute(
-                "INSERT INTO market_imports VALUES (?, ?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO market_imports VALUES (?, ?, ?, ?, ?)",
                 (digest, detected, str(path), context.written,
+                 datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
+            )
+            connection.execute(
+                "INSERT INTO market_import_runs VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (run_id, digest, detected, options_json, context.written,
+                 json.dumps(dict(context.skipped), sort_keys=True),
                  datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")),
             )
     except _RowError as error:
@@ -542,5 +597,13 @@ def import_market_file(
         "status": "imported",
         "written": context.written,
         "skipped": dict(sorted(context.skipped.items())),
+        "sha256": digest,
+        "run_id": run_id,
     }
+
+
+def import_market_batch(connection, paths, **options):
+    """Import a complete provider delivery or roll back every file in the batch."""
+    with atomic_transaction(connection):
+        return [import_market_file(connection, path, **options) for path in paths]
 

@@ -36,7 +36,7 @@ class ScanContextTests(unittest.TestCase):
 
         members = self.root / "ind_nifty500list.csv"
         fx.write_index_members(members, [(f"SYM{i:02d}", "Banks") for i in range(30)])
-        import_market_file(self.db, members)
+        import_market_file(self.db, members, available_at=self.day + "T00:00:00Z")
         announcements = self.root / "announcements.csv"
         day = date.fromisoformat(self.day)
         fx.write_announcements(announcements, [(target, "Receipt of order worth Rs 400 crore", day, "11:00:00")])

@@ -28,7 +28,7 @@ It never sees the symbol, any date, client names or absolute prices. Without tha
 ## How Jev is proven
 
 ```bash
-python -m stockex.cli backtest market.sqlite3 --from 2025-10-01 --to 2026-08-31 --jev --out scorecard.json
+python -m stockex.cli backtest market.sqlite3 --from 2025-10-01 --to 2026-07-31 --jev --out scorecard.json
 ```
 
 Every filled backtest trade is judged, and its outcome (`t1_hit`) is recorded. The scorecard's `jev` section reports:

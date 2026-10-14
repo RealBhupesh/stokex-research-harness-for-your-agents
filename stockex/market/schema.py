@@ -1,15 +1,27 @@
 """SQLite tables for imported NSE end-of-day market files.
 
-These tables are versioned separately from the evidence store so either can
-evolve without migrating the other. Both may live in the same database file.
+These tables are versioned separately from the evidence store. Use separate
+database files: their corporate_actions tables have different contracts.
 """
 
 import sqlite3
+from ..operations import atomic_transaction
 
 
-MARKET_SCHEMA_VERSION = 2
+MARKET_SCHEMA_VERSION = 4
 
 _TABLES = (
+    """
+    CREATE TABLE IF NOT EXISTS market_import_runs (
+        run_id TEXT PRIMARY KEY,
+        sha256 TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        options_json TEXT NOT NULL,
+        rows INTEGER NOT NULL,
+        skipped_json TEXT NOT NULL,
+        imported_at TEXT NOT NULL
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS market_schema_version (
         version INTEGER PRIMARY KEY,
@@ -101,6 +113,7 @@ _TABLES = (
         kind TEXT NOT NULL CHECK (kind IN ('SPLIT', 'BONUS', 'CONSOLIDATION')),
         factor REAL NOT NULL CHECK (factor > 0),
         purpose TEXT,
+        available_at TEXT NOT NULL,
         PRIMARY KEY (symbol, ex_date, kind)
     )
     """,
@@ -147,6 +160,7 @@ _TABLES = (
         stage TEXT,
         from_date TEXT NOT NULL,
         to_date TEXT,
+        available_at TEXT NOT NULL,
         PRIMARY KEY (list_name, symbol, from_date)
     )
     """,
@@ -154,8 +168,35 @@ _TABLES = (
 
 
 def initialize_market_schema(connection: sqlite3.Connection) -> None:
+    with atomic_transaction(connection):
+        _initialize_market_schema(connection)
+
+
+def _initialize_market_schema(connection: sqlite3.Connection) -> None:
+    existing = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='market_schema_version'"
+    ).fetchone()
+    if existing:
+        version = connection.execute("SELECT MAX(version) FROM market_schema_version").fetchone()[0]
+        if version is not None and version > MARKET_SCHEMA_VERSION:
+            raise sqlite3.DatabaseError(
+                f"Market schema version {version} is newer than this code ({MARKET_SCHEMA_VERSION})"
+            )
+    # The evidence store uses a different corporate_actions contract.
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(corporate_actions)")}
+    if columns and "symbol" not in columns:
+        raise sqlite3.DatabaseError("Use separate database files for market data and the evidence store")
     for statement in _TABLES:
         connection.execute(statement)
+    # Old rows have no historical publication evidence. Make them visible only
+    # from migration time, rather than manufacturing knowledge at their ex-date.
+    for table in ("corporate_actions", "restrictions"):
+        columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+        if "available_at" not in columns:
+            connection.execute(f"ALTER TABLE {table} ADD COLUMN available_at TEXT")
+            connection.execute(
+                f"UPDATE {table} SET available_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')"
+            )
     row = connection.execute("SELECT MAX(version) FROM market_schema_version").fetchone()
     if row[0] is None or row[0] < MARKET_SCHEMA_VERSION:
         # New tables are created above with IF NOT EXISTS, so upgrading only records the version.
@@ -168,7 +209,6 @@ def initialize_market_schema(connection: sqlite3.Connection) -> None:
         raise sqlite3.DatabaseError(
             f"Market schema version {row[0]} is newer than this code ({MARKET_SCHEMA_VERSION})"
         )
-    connection.commit()
 
 
 def open_market_db(path) -> sqlite3.Connection:

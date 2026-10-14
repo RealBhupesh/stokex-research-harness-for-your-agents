@@ -1,10 +1,12 @@
 import json
 import os
 import unittest
+import io
 from unittest import mock
 
 from stockex.jev.client import (
     JevClient, JevConfigError, JevRequestError, JevResponseError, validate_questions,
+    MAX_RESPONSE_BYTES, _bounded_read, _NoRedirect,
 )
 
 
@@ -16,7 +18,7 @@ QUESTIONS = {
 ANSWERS = {
     "topic": {"type": "choice", "choice": "billing", "probabilities": {"billing": 0.9, "bug": 0.1}, "confidence": 0.9},
     "urgent": {"type": "noul", "noul": 0.82},
-    "severity": {"type": "score", "score": "high", "probabilities": {"low": 0.2, "high": 0.8}, "confidence": 0.75},
+    "severity": {"type": "score", "score": 0.8, "legend": {"0": "Minor", "1": "Severe"}, "probabilities": {"0": 0.2, "1": 0.8}, "confidence": 0.75},
 }
 
 
@@ -39,6 +41,30 @@ def ok(answers=ANSWERS):
 
 
 class JevClientTests(unittest.TestCase):
+    def test_transport_bounds_responses_and_refuses_redirects(self):
+        with self.assertRaises(JevResponseError):
+            _bounded_read(io.BytesIO(b"x" * (MAX_RESPONSE_BYTES + 1)))
+        self.assertIsNone(_NoRedirect().redirect_request(None, None, 302, "", {}, "https://other.example"))
+
+    def test_insecure_endpoint_and_invalid_timeout_are_rejected(self):
+        for kwargs in ({"base_url": "http://api.example.com"},
+                       {"base_url": "https://user:secret@api.example.com"},
+                       {"timeout": float("nan")}, {"timeout": 0}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(JevConfigError):
+                JevClient("key", **kwargs)
+
+    def test_http_errors_do_not_echo_provider_secrets(self):
+        with self.assertRaises(JevRequestError) as caught:
+            JevClient("secret-key", transport=FakeTransport((401, b"secret-key"))).evaluate("s", QUESTIONS)
+        self.assertNotIn("secret-key", str(caught.exception))
+
+    def test_retry_waits_and_uses_bounded_attempt_count(self):
+        sleeper = mock.Mock()
+        transport = FakeTransport((429, {}), ok())
+        JevClient("key", transport=transport, sleeper=sleeper).evaluate("s", QUESTIONS)
+        self.assertEqual(len(transport.calls), 2)
+        sleeper.assert_called_once_with(0.25)
+
     def test_request_shape_and_validated_answers(self):
         transport = FakeTransport(ok())
         result = JevClient("key", transport=transport).evaluate("state text", QUESTIONS)
@@ -51,6 +77,10 @@ class JevClientTests(unittest.TestCase):
         self.assertEqual(result["model"], "jev-1.13.0")
         self.assertEqual(result["answers"]["urgent"]["noul"], 0.82)
         self.assertEqual(result["usage"], {"input_tokens": 10})
+        self.assertEqual(call["body"]["questions"]["severity"]["criteria"], ["Minor", "Severe"])
+        self.assertEqual(result["answers"]["severity"]["score"], 0.8)
+        self.assertEqual(result["answers"]["severity"]["level"], "high")
+        self.assertEqual(result["answers"]["severity"]["level_probabilities"], {"low": 0.2, "high": 0.8})
 
     def test_missing_api_key_is_config_error(self):
         with mock.patch.dict(os.environ, {}, clear=True):
@@ -65,6 +95,7 @@ class JevClientTests(unittest.TestCase):
     def test_question_validation(self):
         invalid = [
             {},
+            {"q": {"type": "score", "instructions": "x", "criteria": {str(i): "level" for i in range(11)}}},
             {"q": {"type": "essay", "instructions": "x"}},
             {"q": {"type": "noul", "instructions": " "}},
             {"q": {"type": "choice", "instructions": "x", "criteria": {"only": "one"}}},
@@ -92,8 +123,38 @@ class JevClientTests(unittest.TestCase):
         with self.assertRaises(JevResponseError):
             JevClient("key", transport=FakeTransport((200, b"not json"))).evaluate("s", QUESTIONS)
 
+    def test_rejects_incomplete_or_inconsistent_distributions(self):
+        cases = [
+            ("topic", {**ANSWERS["topic"], "probabilities": {"billing": 1.0}}),
+            ("topic", {**ANSWERS["topic"], "probabilities": {"billing": 0.9, "bug": 0.9}}),
+            ("topic", {**ANSWERS["topic"], "choice": "bug"}),
+            ("topic", {k: v for k, v in ANSWERS["topic"].items() if k != "confidence"}),
+            ("topic", {**ANSWERS["topic"], "choice": []}),
+            ("severity", {**ANSWERS["severity"], "score": "high"}),
+            ("severity", {**ANSWERS["severity"], "score": True}),
+            ("severity", {**ANSWERS["severity"], "score": 1.0}),
+            ("severity", {**ANSWERS["severity"], "score": float("nan")}),
+            ("severity", {**ANSWERS["severity"], "legend": {"0": "Severe", "1": "Minor"}}),
+            ("severity", {**ANSWERS["severity"], "probabilities": {"low": 0.2, "high": 0.8}}),
+        ]
+        for key, bad in cases:
+            with self.subTest(answer=bad), self.assertRaises(JevResponseError):
+                JevClient("key", transport=FakeTransport(ok({**ANSWERS, key: bad}))).evaluate("s", QUESTIONS)
+
+    def test_expected_score_is_not_rounded_into_a_symbolic_answer(self):
+        # Equal extreme modes have a middle expected value; no middle answer was selected.
+        questions = {"q": {"type": "score", "instructions": "Rate", "criteria": {
+            "low": "Low", "middle": "Middle", "high": "High",
+        }}}
+        answer = {"type": "score", "score": 1.0, "confidence": 0.8,
+                  "legend": {"0": "Low", "1": "Middle", "2": "High"},
+                  "probabilities": {"0": 0.5, "1": 0.0, "2": 0.5}}
+        result = JevClient("key", transport=FakeTransport(ok({"q": answer}))).evaluate("s", questions)
+        self.assertIsNone(result["answers"]["q"]["level"])
+        self.assertEqual(result["answers"]["q"]["score"], 1.0)
+
     def test_retries_once_on_server_error_or_network_failure(self):
-        for first in ((503, {"error": "busy"}), (429, {}), OSError("reset")):
+        for first in ((503, {"error": "busy"}), (429, {}), (529, {}), OSError("reset")):
             with self.subTest(first=repr(first)):
                 transport = FakeTransport(first, ok())
                 JevClient("key", transport=transport).evaluate("s", QUESTIONS)

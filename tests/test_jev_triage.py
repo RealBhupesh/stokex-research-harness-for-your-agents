@@ -1,10 +1,11 @@
 import copy
+import json
 from datetime import datetime, timezone
 import pathlib
 import tempfile
 import unittest
 
-from stockex.jev.client import JevRequestError, validate_questions
+from stockex.jev.client import JevClient, JevRequestError, validate_questions
 from stockex.jev.triage import CONFLICT_QUESTIONS, EVIDENCE_QUESTIONS, triage_packet
 from stockex.store.database import PointInTimeStore
 from stockex.store.records import validate_envelope
@@ -45,6 +46,9 @@ def records():
 
 def choice(kind, selected, probability, confidence=None):
     answer = {"type": kind, kind: selected, "probabilities": {selected: probability}}
+    if kind == "score":
+        answer = {"type": "score", "score": 2.0, "level": selected,
+                  "level_probabilities": {selected: probability}}
     if confidence is not None:
         answer["confidence"] = confidence
     return answer
@@ -101,6 +105,37 @@ class JevTriageTests(unittest.TestCase):
     def test_packet_is_point_in_time_and_contains_conflict(self):
         self.assertEqual([s["source_id"] for s in self.packet["sources"]], ["blog", "filing"])
         self.assertEqual(len(self.packet["conflicts"]), 1)
+
+    def test_live_contract_triage_keeps_numeric_scores_and_symbolic_flags(self):
+        def transport(url, headers, body, timeout):
+            request = json.loads(body)
+            answers = {}
+            for key, question in request["questions"].items():
+                kind = question["type"]
+                if kind == "noul":
+                    answers[key] = {"type": kind, "noul": 0.9 if key == "contradicts" else 0.1}
+                elif kind == "score":
+                    self.assertEqual(question["criteria"], list(EVIDENCE_QUESTIONS[key]["criteria"].values()))
+                    answers[key] = {"type": kind, "score": 2.9, "confidence": 0.9,
+                                    "legend": {str(i): value for i, value in enumerate(question["criteria"])},
+                                    "probabilities": {"0": 0.0, "1": 0.0, "2": 0.1, "3": 0.9}}
+                else:
+                    selected = "social" if key == "source_class" else "rumour"
+                    answers[key] = {"type": kind, "choice": selected, "confidence": 0.9,
+                                    "probabilities": {option: float(option == selected) for option in question["criteria"]}}
+            return 200, json.dumps({"model": "jev-1.13.0", "answers": answers}).encode()
+        report = self.triage(JevClient("test", transport=transport), {"filing": "text", "blog": "text"})
+        self.assertIn("CLAIM_NOT_FACT", self.flags(report, "blog"))
+        answer = report["sources"][0]["answers"]["materiality"]
+        self.assertEqual((answer["score"], answer["level"]), (2.9, "controlling"))
+        self.assertEqual(report["schema_version"], 2)
+
+    def test_ambiguous_materiality_suppresses_claim_flag(self):
+        answers = source_answers(claim="rumour")
+        answers["materiality"]["level"] = None
+        report = self.triage(FakeClient({"filing": answers, "blog": answers}))
+        self.assertIn("LOW_CONFIDENCE", self.flags(report, "blog"))
+        self.assertNotIn("CLAIM_NOT_FACT", self.flags(report, "blog"))
 
     def test_flags_mismatch_claim_and_substantive_conflict(self):
         client = FakeClient({

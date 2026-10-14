@@ -6,7 +6,7 @@ from stockex.jev.cache import JevCache
 from stockex.jev.candidates import (
     CANDIDATE_QUESTIONS, JudgeBudget, candidate_state, judge_state,
 )
-from stockex.jev.client import JevRequestError, validate_questions
+from stockex.jev.client import JevClient, JevRequestError, validate_questions
 
 
 CANDIDATE = {
@@ -27,7 +27,7 @@ REGIME = {"label": "RISK_ON", "inputs": {"nifty_close": 25010.5, "nifty_ret20": 
                                          "vix": 12.4, "vix_chg5": -0.05}}
 ANSWERS = {
     "follow_through": {"type": "noul", "noul": 0.64},
-    "catalyst_quality": {"type": "score", "score": "strong", "confidence": 0.8},
+    "catalyst_quality": {"type": "score", "score": 3.0, "level": "strong", "confidence": 0.8},
     "crowding_risk": {"type": "noul", "noul": 0.2},
     "failure_mode": {"type": "choice", "choice": "market_drag", "confidence": 0.6},
 }
@@ -81,6 +81,26 @@ class JudgeTests(unittest.TestCase):
         self.assertEqual((first["follow_through"], first["catalyst_quality"], first["failure_mode"]),
                          (0.64, "strong", "market_drag"))
         self.assertEqual((first["cached"], second["cached"], second["model"]), (False, True, "jev-1.13.0"))
+
+    def test_live_contract_candidate_scores_remain_auditable(self):
+        def transport(url, headers, body, timeout):
+            request = json.loads(body)
+            self.assertIsInstance(request["questions"]["catalyst_quality"]["criteria"], list)
+            answers = {
+                "follow_through": {"type": "noul", "noul": 0.64},
+                "crowding_risk": {"type": "noul", "noul": 0.2},
+                "failure_mode": {"type": "choice", "choice": "market_drag", "confidence": 0.9,
+                                 "probabilities": {key: float(key == "market_drag") for key in CANDIDATE_QUESTIONS["failure_mode"]["criteria"]}},
+                "catalyst_quality": {"type": "score", "score": 2.85, "confidence": 0.8,
+                                     "legend": {str(i): text for i, text in enumerate(request["questions"]["catalyst_quality"]["criteria"])},
+                                     "probabilities": {"0": 0.0, "1": 0.0, "2": 0.15, "3": 0.85}},
+            }
+            return 200, json.dumps({"model": "jev-1.13.0", "answers": answers}).encode()
+        client = JevClient("key", transport=transport)
+        first = judge_state(self.state, client, self.cache)
+        self.assertEqual(first["catalyst_quality"], "strong")
+        self.assertEqual(first["catalyst_quality_score"], 2.85)
+        self.assertEqual(judge_state(self.state, client, self.cache)["catalyst_quality_score"], 2.85)
 
     def test_cache_is_keyed_by_model(self):
         judge_state(self.state, FakeClient(), self.cache)

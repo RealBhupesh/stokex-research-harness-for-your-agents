@@ -67,7 +67,7 @@ class AdjustmentTests(unittest.TestCase):
         self.import_split_history(adjusted_prev_close=False)
         file = self.root / "corp_actions.csv"
         fx.write_corp_actions(file, [("ABC", "Face Value Split (Sub-Division) - From Rs 10/- Per Share To Rs 2/- Per Share", self.ex)])
-        self.assertEqual(import_market_file(self.db, file)["written"], 1)
+        self.assertEqual(import_market_file(self.db, file, available_at="2026-06-01T13:00:00Z")["written"], 1)
         series = load_history(self.db, "ABC", self.days[-1].isoformat())
         i = series.dates.index(self.ex.isoformat())
         self.assertAlmostEqual(series.close[i - 1] / series.close[i], 1.0, delta=0.01)
@@ -88,7 +88,7 @@ class AdjustmentTests(unittest.TestCase):
         self.import_split_history(adjusted_prev_close=True)
         file = self.root / "corp_actions.csv"
         fx.write_corp_actions(file, [("ABC", "Bonus 4:1", self.ex)])
-        import_market_file(self.db, file)
+        import_market_file(self.db, file, available_at="2026-06-01T13:00:00Z")
         before = load_history(self.db, "ABC", self.days[39].isoformat())
         self.assertEqual(before.adjustments, [])
         after = load_history(self.db, "ABC", self.days[-1].isoformat())

@@ -104,8 +104,8 @@ def load_histories(
     if adjust:
         explicit: dict[str, list] = {}
         for row in connection.execute(
-            "SELECT symbol, ex_date, kind, factor FROM corporate_actions WHERE ex_date <= ? ORDER BY ex_date",
-            (as_of,),
+            "SELECT symbol, ex_date, kind, factor FROM corporate_actions WHERE ex_date <= ? AND available_at <= ? ORDER BY ex_date",
+            (as_of, cutoff(as_of)),
         ):
             explicit.setdefault(row["symbol"], []).append(
                 {"ex_date": row["ex_date"], "kind": row["kind"], "factor": row["factor"]}
@@ -188,8 +188,9 @@ def option_chain(connection, symbol: str, trade_date: str) -> list[dict]:
         return []
     rows = connection.execute(
         "SELECT instrument, expiry, strike, settle, close, open_interest, underlying FROM fo_bars "
-        "WHERE symbol = ? AND trade_date = ? AND expiry = ? AND instrument IN ('CE', 'PE') ORDER BY strike",
-        (symbol.upper(), trade_date, expiry),
+        "WHERE symbol = ? AND trade_date = ? AND expiry = ? AND instrument IN ('CE', 'PE') "
+        "AND available_at <= ? ORDER BY strike",
+        (symbol.upper(), trade_date, expiry, cutoff(trade_date)),
     ).fetchall()
     return [dict(row) for row in rows]
 
@@ -212,8 +213,8 @@ def restrictions_on(connection, trade_date: str, *, through: str | None = None) 
     """Lists active on ``trade_date``, plus any starting by ``through`` (e.g. tomorrow's ban list)."""
     rows = connection.execute(
         "SELECT symbol, list_name, stage FROM restrictions WHERE from_date <= ? "
-        "AND (to_date IS NULL OR to_date >= ?) ORDER BY symbol, list_name",
-        (through or trade_date, trade_date),
+        "AND (to_date IS NULL OR to_date >= ?) AND available_at <= ? ORDER BY symbol, list_name",
+        (through or trade_date, trade_date, cutoff(trade_date)),
     ).fetchall()
     result: dict[str, list[str]] = {}
     for row in rows:
@@ -222,12 +223,34 @@ def restrictions_on(connection, trade_date: str, *, through: str | None = None) 
     return result
 
 
-def sector_map(connection) -> dict[str, str]:
+def sector_map(connection, as_of: str | None = None) -> dict[str, str]:
     """Symbol to industry from the most recent constituent list that names it."""
+    clause = " AND as_of_date <= ?" if as_of else ""
     rows = connection.execute(
-        "SELECT symbol, industry FROM index_members WHERE industry IS NOT NULL ORDER BY as_of_date"
+        "SELECT symbol, industry FROM index_members WHERE industry IS NOT NULL" + clause +
+        " ORDER BY as_of_date, index_name, symbol", (as_of,) if as_of else (),
     ).fetchall()
     return {row["symbol"]: row["industry"] for row in rows}
+
+
+def sector_maps_by_day(connection, days: list[str]) -> dict[str, dict[str, str]]:
+    """Advance sector classifications only when their dated snapshots are available."""
+    if not days:
+        return {}
+    rows = iter(connection.execute(
+        "SELECT symbol, industry, as_of_date FROM index_members WHERE industry IS NOT NULL "
+        "AND as_of_date <= ? ORDER BY as_of_date, index_name, symbol", (max(days),)
+    ))
+    row = next(rows, None)
+    current, result = {}, {}
+    for day in sorted(set(days)):
+        if row is not None and row["as_of_date"] <= day:
+            current = dict(current)
+        while row is not None and row["as_of_date"] <= day:
+            current[row["symbol"]] = row["industry"]
+            row = next(rows, None)
+        result[day] = current
+    return result
 
 
 def announcements_between(connection, start: str, end: str) -> dict[str, list[dict]]:

@@ -3,6 +3,8 @@ import re
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
+from stockex.backtest.engine import _portfolio, _stats
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -85,6 +87,48 @@ class SimulateTradeTests(unittest.TestCase):
         self.assertTrue(all(leg["price"] >= 120 for leg in trade["legs"]))
 
 
+class PortfolioAccountingTests(unittest.TestCase):
+    def simulate(self, days, close, trade, candidates=None):
+        series = SimpleNamespace(dates=days, close=close)
+        universe = SimpleNamespace(features={"X": SimpleNamespace(series=series)})
+        candidate = {"symbol": "X", "plan": {"shares": 10}}
+        daily = {day: ("NEUTRAL", [candidate] if day == days[0] else []) for day in days}
+        return _portfolio(universe, days, daily, [trade], 1000, 5, {})
+
+    def test_partial_exit_books_cash_and_marks_only_remaining_shares(self):
+        days = ["2026-01-01", "2026-01-02", "2026-01-03"]
+        trade = {"symbol": "X", "signal_date": days[0], "entry_date": days[1],
+                 "exit_date": "2026-01-04", "fill": 100, "return_pct": .10,
+                 "r_multiple": 1, "sessions_held": 3, "exit_reason": "END_OF_DATA",
+                 "legs": [{"date": days[1], "fraction": .5, "price": 120, "reason": "T1"},
+                          {"date": "2026-01-04", "fraction": .5, "price": 100, "reason": "END_OF_DATA"}]}
+        result = self.simulate(days, [100, 120, 100], trade)
+        self.assertEqual(result["final_equity"], 1100)
+        self.assertAlmostEqual(result["max_drawdown"], -1 / 12, places=5)
+        self.assertEqual(result["stats"]["trades"], 0)
+
+    def test_entry_cost_is_not_booked_on_signal_day(self):
+        days = ["2026-01-01", "2026-01-02"]
+        trade = {"symbol": "X", "signal_date": days[0], "entry_date": days[1],
+                 "exit_date": days[1], "fill": 100, "return_pct": -.1,
+                 "r_multiple": -1, "sessions_held": 1, "exit_reason": "STOP",
+                 "legs": [{"date": days[1], "fraction": 1, "price": 90, "reason": "STOP"}]}
+        result = self.simulate(days, [50, 90], trade)
+        self.assertEqual([p["equity"] for p in result["equity_curve"]], [1000, 900])
+
+    def test_split_adjusted_marks_preserve_signal_day_share_value(self):
+        days = ["2026-01-01", "2026-01-02"]
+        trade = {"symbol": "X", "signal_date": days[0], "entry_date": days[1],
+                 "exit_date": "2026-01-03", "fill": 100, "price_scale": 2,
+                 "return_pct": .1, "r_multiple": 1, "sessions_held": 2,
+                 "exit_reason": "END_OF_DATA", "legs": [
+                     {"date": "2026-01-03", "fraction": 1, "price": 110, "reason": "END_OF_DATA"}]}
+        self.assertEqual(self.simulate(days, [50, 55], trade)["final_equity"], 1100)
+
+    def test_censored_trade_does_not_contribute_a_win(self):
+        self.assertEqual(_stats([{"exit_reason": "END_OF_DATA"}])["trades"], 0)
+
+
 class WalkForwardTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -133,15 +177,16 @@ class WalkForwardTests(unittest.TestCase):
         self.assertEqual(with_future["candidates"], without_future["candidates"])
         self.assertEqual(with_future["regime"], without_future["regime"])
 
-    def test_scan_notes_in_sample_scorecard(self):
-        card = {"period": {"to": self.dates[-1]}, "setups": {}}
-        report = scan(self.db, self.dates[-10], scorecard=card)
-        self.assertTrue(any("in-sample" in note for note in report["notes"]))
+    def test_scan_rejects_in_sample_scorecard(self):
+        card = {"period": {"to": self.dates[-1], "data_through": self.dates[-1]}, "setups": {}}
+        with self.assertRaisesRegex(ValueError, "overlap"):
+            scan(self.db, self.dates[-10], scorecard=card)
 
 
 class TrackRecordTests(unittest.TestCase):
     def card(self, trades, expectancy, version=1):
-        stats = {"trades": trades, "expectancy_r": expectancy, "hit_rate": 0.5}
+        stats = {"trades": trades, "expectancy_r": expectancy, "hit_rate": 0.5,
+                 "status": "PROVEN", "expectancy_lower_bound": expectancy - 0.05}
         return {"setups": {"BREAKOUT_52W": {"version": version, "overall": stats, "by_regime": {"RISK_ON": stats}}}}
 
     def test_status_rules(self):

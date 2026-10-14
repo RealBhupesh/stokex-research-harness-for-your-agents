@@ -77,8 +77,11 @@ For aggressive short-term picks, Jev also acts as a measured trade filter. See [
 
 - Calibration and accuracy claims are the vendor's. They have not been tested
   here on Indian filings.
-- The `score` request encoding (levels sent as ordered `criteria`) must be
-  confirmed against `https://docs.typesafe.ai/api` before live use.
+- Score requests use ordered description arrays and numeric expected-score
+  responses, as documented in [the provider API contract](https://docs.typesafe.ai/api).
+  STOCKEX preserves the numeric score and exposes an explicit modal level for
+  categorical displays; tied modes remain unclassified. Contract-shaped offline
+  tests do not establish account entitlement or successful live API execution.
 - Excerpts go to a third-party API. Do not send licensed, confidential or
   personal data without the right to do so.
 - Triage cannot establish source authenticity, completeness or investment

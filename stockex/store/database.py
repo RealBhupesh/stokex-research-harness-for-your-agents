@@ -172,6 +172,9 @@ class PointInTimeStore:
             connection.row_factory = sqlite3.Row
             connection.execute("PRAGMA foreign_keys = ON")
             connection.execute("PRAGMA busy_timeout = 5000")
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(corporate_actions)")}
+            if columns and "action_id" not in columns:
+                raise sqlite3.DatabaseError("Use separate database files for market data and the evidence store")
             initialize_database(connection)
         except BaseException:
             connection.close()

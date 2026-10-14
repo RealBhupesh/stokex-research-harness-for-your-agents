@@ -1,5 +1,6 @@
 from datetime import date
 import pathlib
+import sqlite3
 import sys
 import tempfile
 import unittest
@@ -109,7 +110,7 @@ class MarketImportTests(unittest.TestCase):
         fx.write_deals(block, [fx.deal_line(D1, "ABC", "Other Fund", "SELL", 10_000, 100)])
         ban = self.path("fo_secban_22092026.csv")
         fx.write_ban(ban, D2, ["XYZ"])
-        kinds = [import_market_file(self.db, file)["kind"] for file in (index, bulk, block, ban)]
+        kinds = [import_market_file(self.db, file, **({"available_at": "2026-09-21T13:00:00Z"} if file == ban else {}))["kind"] for file in (index, bulk, block, ban)]
         self.assertEqual(kinds, ["index", "bulk", "block", "fo-ban"])
         self.assertEqual(index_closes(self.db, "NIFTY 50", "2026-09-21"), {"2026-09-21": 25050.0})
         deals = deals_between(self.db, "2026-09-21", "2026-09-21", symbol="ABC")
@@ -121,7 +122,7 @@ class MarketImportTests(unittest.TestCase):
     def test_restrictions_file(self):
         file = self.path("asm.csv")
         file.write_text("list,symbol,stage,from_date,to_date\nASM,abc,LT-2,2026-09-01,\n", encoding="utf-8")
-        import_market_file(self.db, file)
+        import_market_file(self.db, file, available_at="2026-09-20T13:00:00Z")
         self.assertEqual(restrictions_on(self.db, "2026-09-21"), {"ABC": ["ASM:LT-2"]})
 
     def test_structural_error_rolls_back_whole_file_with_line(self):
@@ -160,12 +161,12 @@ class MarketImportTests(unittest.TestCase):
         status = coverage(self.db)
         self.assertEqual((status["bars"]["first"], status["bars"]["last"]), ("2026-09-21", "2026-09-22"))
 
-    def test_market_tables_share_a_file_with_the_evidence_store(self):
+    def test_market_schema_rejects_incompatible_evidence_tables(self):
         path = self.root / "shared.sqlite3"
         with PointInTimeStore.open(path) as store:
             self.assertTrue(store.integrity_report()["valid"])
-        connection = open_market_db(path)
-        connection.close()
+        with self.assertRaises(sqlite3.DatabaseError):
+            open_market_db(path)
         with PointInTimeStore.open(path) as store:
             self.assertTrue(store.integrity_report()["valid"])
 

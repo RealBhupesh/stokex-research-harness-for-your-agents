@@ -144,7 +144,7 @@ def generate_market(root, *, symbols=30, days=300, fo_symbols=10, seed=7, start=
     for day in weekdays(start, days):
         cm_lines, fo_lines, moves = [], [], []
         expiry = _last_thursday(day)
-        next_expiry = _last_thursday(date(day.year + (day.month == 12), day.month % 12 + 1, 1))
+        next_expiry = _last_thursday(date(expiry.year + (expiry.month == 12), expiry.month % 12 + 1, 1))
         for name in names:
             shock = rng.gauss(drift[name], vol[name])
             spike = rng.random() < 0.03
