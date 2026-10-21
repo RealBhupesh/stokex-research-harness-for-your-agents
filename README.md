@@ -39,7 +39,7 @@ Open `SKILL.md` in an assistant with web browsing and file access, or upload thi
 
 STOCKEX is an evidence-first Indian equity research operating system for conservative, compounding, tactical, event-driven, asymmetric and aggressive short-term (1–10 trading day) mandates. It gives an agent the checklists a buy-side analyst and a professional short-term trader actually use, and code that computes the signals from NSE end-of-day files, measures which setups have worked, and ranks today's candidates with a full risk plan.
 
-The package includes an orchestrator, twelve specialist skills, an analyst playbook, a short-term trading playbook, an Indian market calendar, KPIs for 22 sectors, NSE market-data importers, nine coded short-term setups, a walk-forward backtester, fifteen gated analyst stages, world-to-stock intelligence, price-move attribution, a point-in-time evidence room, financial normalization, driver forecasting, variant perception, catalyst underwriting, management and relationship analysis, multi-layer risk detection, legal-credit review, portfolio opportunity cost, execution simulation, adversarial IC review, thesis monitoring, calibration, a reusable deep-research prompt and deterministic validators. All wording and code here is original. Linked third-party reports are sources, not redistributed assets or permission to redistribute market data.
+The package includes an orchestrator, thirteen specialist skills, a private equity deal engine (LBO, DCF, comps, live-formula Excel model and IC memo), an analyst playbook, a short-term trading playbook, an Indian market calendar, KPIs for 22 sectors, NSE market-data importers, nine coded short-term setups, a walk-forward backtester, fifteen gated analyst stages, world-to-stock intelligence, price-move attribution, a point-in-time evidence room, financial normalization, driver forecasting, variant perception, catalyst underwriting, management and relationship analysis, multi-layer risk detection, legal-credit review, portfolio opportunity cost, execution simulation, adversarial IC review, thesis monitoring, calibration, a reusable deep-research prompt and deterministic validators. All wording and code here is original. Linked third-party reports are sources, not redistributed assets or permission to redistribute market data.
 
 ```mermaid
 flowchart TD
@@ -57,10 +57,12 @@ flowchart TD
 ## File map
 - `assets/stockex-hero.jpg`: repository hero and social cover image.
 - `SKILL.md`: workflow entry point.
-- `skills/`: screening, evidence room, market intelligence, swing research, momentum trading (1–10 days), fundamentals, variant perception, valuation, risk, skeptical review, investment committee and thesis monitoring.
+- `skills/`: screening, evidence room, market intelligence, swing research, momentum trading (1–10 days), private equity deals, fundamentals, variant perception, valuation, risk, skeptical review, investment committee and thesis monitoring.
 - `references/analyst-playbook.md`, `references/short-term-playbook.md`, `references/india-market-calendar.md`, `references/sector-kpis.md`: what expert analysts and traders check, the catalysts that move Indian stocks over days, recurring event dates and sector lead indicators.
 - `stockex/market/`: importers and point-in-time queries for NSE bhavcopy (with delivery), UDiFF CM/F&O bhavcopy, index closes, bulk/block deals, the F&O ban list and ASM/GSM lists.
 - `stockex/signals/`: indicators, F&O positioning (OI quadrant, rollover, PCR, IV), market regime, nine named setups, the hard risk plan and the scanner.
+- `stockex/deals/`: deal case validation, three-statement projection, LBO, WACC/DCF/comps, scenario and breakeven analysis, a dependency-free .xlsx writer with an independent formula evaluator, the Excel model builder and the IC memo.
+- `examples/deals/`: the illustrative Project Saffron case and its generated workbook, memo and results.
 - `stockex/backtest/`: walk-forward backtester, statistical tests behind PROVEN, frozen setup scorecards and the forward-test journal.
 - `references/accuracy-controls.md`: corporate-action adjustment, the journal, the statistics behind PROVEN, execution realism, sectors, announcements and the walk-forward model.
 - `references/`: gated research rules for evidence, world drivers, attribution, normalization, forecasts, expectations, catalysts, management, relationships, risks, legal-credit, portfolio, execution and calibration.
@@ -96,6 +98,34 @@ prove that the supplied evidence is authentic, complete or investment-grade.
 Keep runtime databases and generated packets outside the repository.
 Use a separate SQLite file for market data: the market and evidence stores have
 different corporate-action contracts, and opening one as the other is rejected.
+
+## Private equity deal engine (LBO, DCF, comps, IC memo)
+
+One command turns a deal case into an investment committee package: an integrated three-statement model, a full LBO, a DCF with a WACC build-up, trading comps and precedent transactions, downside tests, a live-formula Excel workbook and an IC memo.
+
+```bash
+python -m stockex.cli deal-model examples/deals/project-saffron.json --out deal-output/
+```
+
+The committed example, [Project Saffron](examples/deals/project-saffron/ic-memo.md), is a fictional take-private of an NSE-listed packaged-foods company. Open [its workbook](examples/deals/project-saffron/model.xlsx) in Excel and switch the case selector on `Inputs`: the statements, debt schedule, covenants and returns all recalculate.
+
+- **Integrated and checked.** Sources equal uses. The balance sheet balances and cash ties in every year, and the value-creation bridge reconciles to the equity gain.
+- **Excel equals the engine.** Every formula in the saved workbook (over 900) is recomputed from the inputs by an independent evaluator and must match the Python engine. The tests also have LibreOffice recalculate it from scratch whenever LibreOffice is installed.
+- **Downside first.** The model reports:
+  - the exit multiples for 1.0x, 2.0x and the hurdle;
+  - the EBITDA shortfall before a covenant breach and before cash runs out;
+  - the maximum bid, the lower of the base-case hurdle price and the downside capital-preservation price;
+  - a seeded Monte Carlo of outcomes.
+- **India-specific structure.** The memo covers:
+  - HoldCo NCD acquisition finance;
+  - the s.94B interest cap with carry-forward;
+  - the 25.17% tax regime;
+  - SEBI open-offer and delisting thresholds;
+  - Companies Act s.67 limits on debt push-down.
+  All of these are flagged for counsel to confirm.
+- **Point-in-time.** `--from-store` fills historicals from the evidence store as of a cutoff, with the observation and source behind every figure.
+
+Method, conventions and limits are in [deal modelling](references/deal-modeling.md). The agent workflow is in the [PE deal skill](skills/india-private-equity-deal/SKILL.md).
 
 ## Aggressive short-term mode (1–10 trading days)
 

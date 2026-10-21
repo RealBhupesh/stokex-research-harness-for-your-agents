@@ -1,5 +1,14 @@
 # Decision-value filter
 
+## Version 5.4 private equity deal engine
+
+- Added an integrated deal engine (three statements, LBO, WACC, DCF, comps, precedents) because control and take-private decisions need financing, covenants and exit paths modelled together, not a standalone DCF.
+- The Excel model is written with live formulas, and the tests recompute it independently (and in LibreOffice when available) against the Python engine, because a spreadsheet nobody has checked is the most common source of deal-model error.
+- Interest accrues on opening balances to avoid circular references; a circularity switch was excluded because it hides errors and does not change the answer materially at annual granularity.
+- The bid recommendation is rule-based and downside-first: the maximum bid is the lower of the base-case hurdle price and the downside capital-preservation price.
+- Indian structuring points (SAST, delisting, acquisition finance, s.67, s.94B) are stated as items for counsel to confirm, not as rules the model enforces, because they change and depend on facts.
+- Excluded: purchase-price allocation, deferred tax, leases, quarterly periods and dividend recaps. They are named in the limits so their absence is visible.
+
 ## Version 5.2 accuracy controls
 
 - Back-adjusted prices for splits, bonuses and consolidations (from the corporate-actions file, or inferred from NSE's adjusted previous close), because raw bhavcopy prices create false breakouts and crashes.

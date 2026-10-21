@@ -13,3 +13,5 @@ For banks/NBFC: P/B linked to sustainable ROE, residual income or equity cash fl
 Build bear/base/bull drivers before target ranges. Do not imply scenario probabilities are statistical unless estimated from a defensible model. Show upside/downside from the same as-of price and horizon, dilution and dividends consistently. Reverse valuation: identify the growth/margin/return assumptions required by market price and test their plausibility. A “margin of safety” discount is a chosen policy, not a guarantee.
 
 Use ../../scripts/finance_helpers.py only for simple deterministic DCF arithmetic; supply precomputed FCFF and correctly reconciled bridge. The helper does not build forecasts. Record formulas and source cells in ../../templates/financial-worksheet.md.
+
+For an integrated three-statement model with a DCF (mid-year convention, Gordon and exit-multiple cross-checks), a WACC build-up from relevered peer betas, trading comps and precedents, use `python -m stockex.cli deal-model` ([deal modelling](../../references/deal-modeling.md)). It writes a live-formula Excel workbook whose every formula is verified against the engine.

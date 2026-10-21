@@ -83,6 +83,27 @@ class ManifestTests(unittest.TestCase):
             "tests/test_market_cli.py",
             "tests/test_signals.py",
             "tests/test_backtest.py",
+            "stockex/deals/__init__.py",
+            "stockex/deals/analysis.py",
+            "stockex/deals/case.py",
+            "stockex/deals/formula_eval.py",
+            "stockex/deals/lbo.py",
+            "stockex/deals/memo.py",
+            "stockex/deals/statements.py",
+            "stockex/deals/store_link.py",
+            "stockex/deals/valuation.py",
+            "stockex/deals/workbook.py",
+            "stockex/deals/xlsx.py",
+            "skills/india-private-equity-deal/SKILL.md",
+            "references/deal-modeling.md",
+            "examples/deals/project-saffron.json",
+            "examples/deals/project-saffron/model.xlsx",
+            "examples/deals/project-saffron/ic-memo.md",
+            "examples/deals/project-saffron/ic-memo.html",
+            "examples/deals/project-saffron/results.json",
+            "tests/test_deals_engine.py",
+            "tests/test_deals_workbook.py",
+            "tests/test_deals_cli.py",
             "stockex/market/corporate.py",
             "stockex/backtest/statistics.py",
             "stockex/backtest/journal.py",
@@ -182,7 +203,7 @@ class MarkdownIntegrityTests(unittest.TestCase):
             if not text.startswith("---\n") or "\nname:" not in text or "\ndescription:" not in text:
                 failures.append(skill_file.relative_to(ROOT).as_posix())
         self.assertEqual(failures, [])
-        self.assertEqual(len(skill_files), 13)
+        self.assertEqual(len(skill_files), 14)
 
 
 if __name__ == "__main__":
