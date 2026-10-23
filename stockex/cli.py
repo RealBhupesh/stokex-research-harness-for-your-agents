@@ -12,6 +12,7 @@ import sys
 
 from .backtest import build_scorecard, data_fingerprint, load_scorecard, run_backtest
 from .backtest import journal
+from .deals import DealCaseError, build_deal
 from .jev.announcements import classify_with_jev
 from .jev.cache import JevCache
 from .jev.client import DEFAULT_MODEL, JevClient, JevError
@@ -97,6 +98,14 @@ def _parser() -> argparse.ArgumentParser:
     reconcile.add_argument("database", type=Path)
     reconcile.add_argument("reference_database", type=Path)
     reconcile.add_argument("--source-url", required=True)
+
+    deal = commands.add_parser("deal-model", help="build the LBO / DCF / comps Excel model and IC memo for a deal case")
+    deal.add_argument("case", type=Path, help="deal case JSON (see examples/deals/project-saffron.json)")
+    deal.add_argument("--out", type=Path, required=True, help="directory for model.xlsx, ic-memo.md/.html, results.json")
+    deal.add_argument("--from-store", dest="store", type=Path,
+                      help="evidence store whose point-in-time observations replace the case historicals")
+    deal.add_argument("--security", help="security_id in the evidence store (with --from-store)")
+    deal.add_argument("--cutoff", help="research cutoff timestamp (with --from-store)")
 
     jev = commands.add_parser("jev-triage", help="advisory Jev triage of a cutoff evidence packet")
     jev.add_argument("database", type=Path)
@@ -246,6 +255,20 @@ def _error_payload(code: str, message: str, **details: object) -> dict:
     return payload
 
 
+def _run_deal(args: argparse.Namespace) -> object:
+    source = args.case
+    if args.store is not None:
+        if not args.security or not args.cutoff:
+            raise ValueError("--from-store needs --security and --cutoff")
+        from .deals.store_link import case_with_store_historicals
+        with PointInTimeStore.open(args.store) as store:
+            source, provenance = case_with_store_historicals(store, args.case, args.security, args.cutoff)
+        result = build_deal(source, args.out)
+        result["historicals_from_store"] = provenance
+        return result
+    return build_deal(source, args.out)
+
+
 def _run(args: argparse.Namespace) -> object:
     if args.command == "research-synthesize":
         return run_research(args.input, args.out)
@@ -253,6 +276,8 @@ def _run(args: argparse.Namespace) -> object:
         return verify_research_bundle(args.directory)
     if args.command == "backup":
         return backup_database(args.database, args.destination)
+    if args.command == "deal-model":
+        return _run_deal(args)
     if args.command == "init":
         with PointInTimeStore.open(args.database) as store:
             return {
@@ -378,6 +403,8 @@ def main(argv: list[str] | None = None) -> int:
         print(_json_output(_error_payload(error.code, error.message)), file=sys.stderr)
     except ProviderError as error:
         print(_json_output(_error_payload(error.code, error.message)), file=sys.stderr)
+    except DealCaseError as error:
+        print(_json_output(_error_payload(error.code, error.message, path=error.path)), file=sys.stderr)
     except StoreValidationError as error:
         print(_json_output(_error_payload(error.code, error.message, path=error.path)), file=sys.stderr)
     except ValueError as error:

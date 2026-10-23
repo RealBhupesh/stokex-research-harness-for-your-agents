@@ -1,0 +1,460 @@
+{
+  "schema_version": 1,
+  "name": "Project Saffron",
+  "company": "Saffron Consumer Brands Ltd",
+  "illustrative": true,
+  "description": "ILLUSTRATIVE CASE. Saffron Consumer Brands is a fictional NSE-listed regional packaged-foods and spices company. Every figure is invented to show the method and resembles no real company.",
+  "sector": "Branded packaged foods and spices",
+  "currency": "INR crore",
+  "share_unit": "crore shares",
+  "fiscal_year_end": "March",
+  "close_date": "2026-03-31",
+  "thesis": [
+    "Regional leader in spices and ready-to-cook mixes with 38% share in its core states and under-penetrated modern trade and e-commerce.",
+    "Founder-led family business facing a succession decision; the promoter group is a willing seller and will roll 10% of the equity.",
+    "Value creation from distribution expansion into two adjacent states, premiumisation of the mix and procurement discipline on commodity spices."
+  ],
+  "historicals": {
+    "years": [
+      "FY24",
+      "FY25",
+      "FY26"
+    ],
+    "revenue": [
+      1920.0,
+      2150.0,
+      2400.0
+    ],
+    "cogs": [
+      1133.0,
+      1258.0,
+      1392.0
+    ],
+    "opex": [
+      480.0,
+      538.0,
+      600.0
+    ],
+    "da": [
+      48.0,
+      53.0,
+      60.0
+    ],
+    "finance_cost": [
+      22.0,
+      20.0,
+      18.0
+    ],
+    "other_income": [
+      12.0,
+      14.0,
+      15.0
+    ],
+    "tax": [
+      62.7,
+      74.3,
+      86.8
+    ]
+  },
+  "balance_sheet": {
+    "cash": 260.0,
+    "receivables": 197.0,
+    "inventory": 229.0,
+    "other_current_assets": 80.0,
+    "ppe": 900.0,
+    "intangibles": 150.0,
+    "other_non_current_assets": 60.0,
+    "payables": 210.0,
+    "other_current_liabilities": 120.0,
+    "debt": 200.0,
+    "other_non_current_liabilities": 70.0,
+    "equity": 1276.0
+  },
+  "market": {
+    "unaffected_price": 380.0,
+    "diluted_shares": 12.0,
+    "week52_low": 331.0,
+    "week52_high": 436.0
+  },
+  "projection": {
+    "years": [
+      "FY27",
+      "FY28",
+      "FY29",
+      "FY30",
+      "FY31"
+    ],
+    "tax_rate": 0.2517,
+    "cash_yield": 0.06
+  },
+  "scenarios": {
+    "base": {
+      "probability": 0.5,
+      "revenue_growth": [
+        0.13,
+        0.13,
+        0.125,
+        0.12,
+        0.115
+      ],
+      "gross_margin": [
+        0.425,
+        0.43,
+        0.435,
+        0.44,
+        0.44
+      ],
+      "opex_pct": [
+        0.25,
+        0.248,
+        0.245,
+        0.243,
+        0.24
+      ],
+      "da_pct": [
+        0.025,
+        0.025,
+        0.025,
+        0.025,
+        0.025
+      ],
+      "capex_pct": [
+        0.04,
+        0.038,
+        0.035,
+        0.035,
+        0.035
+      ],
+      "receivable_days": [
+        30,
+        30,
+        30,
+        30,
+        30
+      ],
+      "inventory_days": [
+        60,
+        60,
+        60,
+        60,
+        60
+      ],
+      "payable_days": [
+        55,
+        55,
+        55,
+        55,
+        55
+      ],
+      "exit_multiple": 13.5
+    },
+    "upside": {
+      "probability": 0.25,
+      "revenue_growth": [
+        0.15,
+        0.155,
+        0.15,
+        0.14,
+        0.13
+      ],
+      "gross_margin": [
+        0.43,
+        0.437,
+        0.443,
+        0.448,
+        0.45
+      ],
+      "opex_pct": [
+        0.249,
+        0.246,
+        0.243,
+        0.24,
+        0.237
+      ],
+      "exit_multiple": 15.5
+    },
+    "downside": {
+      "probability": 0.25,
+      "revenue_growth": [
+        0.07,
+        0.06,
+        0.06,
+        0.07,
+        0.08
+      ],
+      "gross_margin": [
+        0.415,
+        0.415,
+        0.415,
+        0.415,
+        0.415
+      ],
+      "opex_pct": [
+        0.255,
+        0.255,
+        0.255,
+        0.255,
+        0.255
+      ],
+      "inventory_days": [
+        65,
+        65,
+        65,
+        65,
+        65
+      ],
+      "exit_multiple": 10.5
+    }
+  },
+  "transaction": {
+    "offer_premium": 0.25,
+    "transaction_fee_pct": 0.015,
+    "financing_fee_pct": 0.02,
+    "financing_fee_amortisation_years": 5,
+    "minimum_cash": 100.0,
+    "rollover_pct": 0.1,
+    "holding_years": 5,
+    "exit_cost_pct": 0.01,
+    "management_incentive_pct": 0.075,
+    "hurdle_irr": 0.2,
+    "target_moic": 2.5,
+    "sweep_pct": 1.0
+  },
+  "debt": [
+    {
+      "name": "OpCo senior term loan",
+      "kind": "amortizing",
+      "ebitda_multiple": 1.5,
+      "cash_rate": 0.0925,
+      "pik_rate": 0.0,
+      "amortization": [
+        0.1,
+        0.1,
+        0.15,
+        0.15,
+        0.2
+      ],
+      "sweep": true,
+      "subject_to_interest_cap": false
+    },
+    {
+      "name": "HoldCo NCDs (private credit)",
+      "kind": "bullet",
+      "ebitda_multiple": 2.5,
+      "cash_rate": 0.11,
+      "pik_rate": 0.03,
+      "amortization": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "sweep": false,
+      "subject_to_interest_cap": true
+    }
+  ],
+  "revolver": {
+    "commitment": 150.0,
+    "cash_rate": 0.09,
+    "undrawn_fee": 0.0035
+  },
+  "covenants": {
+    "max_net_leverage": [
+      4.0,
+      3.5,
+      3.0,
+      2.75,
+      2.5
+    ],
+    "min_interest_cover": 2.25,
+    "min_dscr": 1.15
+  },
+  "tax": {
+    "interest_cap_pct_ebitda": 0.3,
+    "interest_cap_threshold": 1.0
+  },
+  "valuation": {
+    "risk_free": 0.066,
+    "equity_risk_premium": 0.07,
+    "size_premium": 0.01,
+    "pre_tax_cost_of_debt": 0.09,
+    "target_debt_to_capital": 0.1,
+    "terminal_growth": 0.055,
+    "exit_multiple": 13.0,
+    "mid_year": true,
+    "peer_betas": [
+      {
+        "name": "Peer A (pan-India packaged foods)",
+        "levered_beta": 0.82,
+        "debt_to_equity": 0.05,
+        "tax_rate": 0.2517
+      },
+      {
+        "name": "Peer B (spices and masalas)",
+        "levered_beta": 0.91,
+        "debt_to_equity": 0.12,
+        "tax_rate": 0.2517
+      },
+      {
+        "name": "Peer C (regional snacks)",
+        "levered_beta": 1.05,
+        "debt_to_equity": 0.25,
+        "tax_rate": 0.2517
+      },
+      {
+        "name": "Peer D (edible oils and staples)",
+        "levered_beta": 0.98,
+        "debt_to_equity": 0.3,
+        "tax_rate": 0.2517
+      },
+      {
+        "name": "Peer E (ready-to-cook)",
+        "levered_beta": 0.88,
+        "debt_to_equity": 0.0,
+        "tax_rate": 0.2517
+      },
+      {
+        "name": "Peer F (dairy and beverages)",
+        "levered_beta": 0.76,
+        "debt_to_equity": 0.08,
+        "tax_rate": 0.2517
+      }
+    ]
+  },
+  "comps": [
+    {
+      "name": "Peer A (pan-India packaged foods)",
+      "market_cap": 35160.0,
+      "net_debt": -900,
+      "revenue": 13800,
+      "ebitda": 2210,
+      "net_income": 1480,
+      "revenue_growth": 0.11,
+      "ebitda_margin": 0.16
+    },
+    {
+      "name": "Peer B (spices and masalas)",
+      "market_cap": 8410.0,
+      "net_debt": 150,
+      "revenue": 3900,
+      "ebitda": 620,
+      "net_income": 390,
+      "revenue_growth": 0.13,
+      "ebitda_margin": 0.159
+    },
+    {
+      "name": "Peer C (regional snacks)",
+      "market_cap": 4400.0,
+      "net_debt": 420,
+      "revenue": 3300,
+      "ebitda": 430,
+      "net_income": 240,
+      "revenue_growth": 0.15,
+      "ebitda_margin": 0.13
+    },
+    {
+      "name": "Peer D (edible oils and staples)",
+      "market_cap": 12910.0,
+      "net_debt": 2600,
+      "revenue": 26500,
+      "ebitda": 1650,
+      "net_income": 820,
+      "revenue_growth": 0.07,
+      "ebitda_margin": 0.062
+    },
+    {
+      "name": "Peer E (ready-to-cook)",
+      "market_cap": 3550.0,
+      "net_debt": -120,
+      "revenue": 1650,
+      "ebitda": 235,
+      "net_income": 160,
+      "revenue_growth": 0.18,
+      "ebitda_margin": 0.142
+    },
+    {
+      "name": "Peer F (dairy and beverages)",
+      "market_cap": 8820.0,
+      "net_debt": 380,
+      "revenue": 8200,
+      "ebitda": 760,
+      "net_income": 455,
+      "revenue_growth": 0.12,
+      "ebitda_margin": 0.093
+    },
+    {
+      "name": "Peer G (bakery and biscuits)",
+      "market_cap": 5020.0,
+      "net_debt": 60,
+      "revenue": 4100,
+      "ebitda": 470,
+      "net_income": 300,
+      "revenue_growth": 0.1,
+      "ebitda_margin": 0.115
+    },
+    {
+      "name": "Peer H (premium foods)",
+      "market_cap": 4370.0,
+      "net_debt": -60,
+      "revenue": 1500,
+      "ebitda": 255,
+      "net_income": 175,
+      "revenue_growth": 0.2,
+      "ebitda_margin": 0.17
+    }
+  ],
+  "precedents": [
+    {
+      "target": "Precedent 1 (regional spices brand)",
+      "acquirer": "Strategic acquirer",
+      "year": "FY22",
+      "ev_ebitda": 17.5,
+      "premium": 0.28
+    },
+    {
+      "target": "Precedent 2 (ready-to-eat brand)",
+      "acquirer": "Financial sponsor",
+      "year": "FY23",
+      "ev_ebitda": 14.2,
+      "premium": 0.22
+    },
+    {
+      "target": "Precedent 3 (packaged staples)",
+      "acquirer": "Financial sponsor",
+      "year": "FY23",
+      "ev_ebitda": 12.6,
+      "premium": 0.18
+    },
+    {
+      "target": "Precedent 4 (snacks platform)",
+      "acquirer": "Strategic acquirer",
+      "year": "FY24",
+      "ev_ebitda": 18.0,
+      "premium": 0.35
+    },
+    {
+      "target": "Precedent 5 (dairy brand)",
+      "acquirer": "Financial sponsor",
+      "year": "FY25",
+      "ev_ebitda": 13.1,
+      "premium": 0.2
+    },
+    {
+      "target": "Precedent 6 (condiments brand)",
+      "acquirer": "Strategic acquirer",
+      "year": "FY25",
+      "ev_ebitda": 15.4,
+      "premium": 0.26
+    }
+  ],
+  "monte_carlo": {
+    "paths": 2000,
+    "seed": 7,
+    "revenue_growth_sd": 0.025,
+    "ebitda_margin_sd": 0.012,
+    "exit_multiple_low": 10.0,
+    "exit_multiple_mode": 13.5,
+    "exit_multiple_high": 16.0
+  }
+}
